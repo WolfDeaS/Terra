@@ -66,8 +66,26 @@ public:
 	virtual void Tick(float DeltaTime) override;
 	void InitCell();
 	void CalculateAndAddToRequestStatus(FName Status);
-	void GiveTasks();
+	
+	TMap<FName, TArray<AInteractionMark*>> UniteMarks(TMap<FName, TArray<AInteractionMark*>> FirstMarksArray, TMap<FName, TArray<AInteractionMark*>> AnotherMarksArray);
 	ATerraCharacter* FindBetterCharacterForActivity(FName Activity, FName AdditionalInfo = "None");
+	ATerraCharacter* GetSlowestCharacter();
+	float GetStatusConsumeAtSecond(FName Status);
+	FName FindActivityByMark(TEnumAsByte<EMarkType> MarkType);
+
+	/// Interaction with Characters /// 
+
+	void GiveTasks();
+
+	bool IsCharacterHaveRequestItems(ATerraCharacter* LocalCharacter);
+
+	void ChangeCharacterWorkStatus(uint8 FunctionType = 0, bool bDeleteItemFromCharactersArray = false , ATerraCharacter* LocalCharacter = nullptr, UObject* ObjectForWorking = nullptr, FName ActivityInfo = "None", FName AddInfo = "None");
+
+	//////////////////////////////////
+
+	UFUNCTION(BlueprintCallable)
+	void BeginOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
+
 
 	UPROPERTY(EditAnywhere)
 	USceneComponent* LocalSceneComponent;
@@ -91,4 +109,10 @@ public:
 
 	UPROPERTY(EditAnywhere)
 	UDataTable* DT_Acitivites;
+
+	UPROPERTY(EditAnywhere)
+	UDataTable* DT_Herb;
+
+	UPROPERTY(EditAnywhere)
+	UDataTable* DT_Items;
 };

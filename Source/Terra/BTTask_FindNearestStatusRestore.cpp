@@ -15,12 +15,6 @@ UBTTask_FindNearestStatusRestore::UBTTask_FindNearestStatusRestore()
 EBTNodeResult::Type UBTTask_FindNearestStatusRestore::ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
 {
 	Super::ExecuteTask(OwnerComp, NodeMemory);
-	/*
-	FVector StatusLocation = OwnerComp.GetBlackboardComponent()->GetValueAsVector(StatusKey.SelectedKeyName);
-	FVector StatusLocation = FVector(100.0f, 100.0f, 0.0f);
-
-	FAIMoveRequest FAIMoveReq;
-	FAIMoveReq.SetGoalLocation(StatusLocation);*/
 	
 	ATerraCharacter* LocalCharacter = Cast<ATerraCharacter>(OwnerComp.GetBlackboardComponent()->GetValueAsObject(CharacterKey.SelectedKeyName));
 
@@ -29,6 +23,7 @@ EBTNodeResult::Type UBTTask_FindNearestStatusRestore::ExecuteTask(UBehaviorTreeC
 	FString LocalString = OwnerComp.GetBlackboardComponent()->GetValueAsName(StatusKey.SelectedKeyName).ToString();
 	LocalString.Append("DebuffsStarts");
 
+	// Eat food from inv
 	while (*LocalCharacter->Modifiers.Find(LocalStatus) < *LocalCharacter->Modifiers.Find(*LocalString))
 	{
 		LocalCharacter->InventoryComponent->UseHighPriorityItemByTag("Food", LocalStatus);
@@ -46,6 +41,7 @@ EBTNodeResult::Type UBTTask_FindNearestStatusRestore::ExecuteTask(UBehaviorTreeC
 
 	TArray<FSItem> LocalItems;
 
+	// Find nearest chest if not enough food in inv
 	LocalCharacter->InventoryComponent->Inventory.GenerateKeyArray(LocalItems);
 	LocalItems = LocalCharacter->InventoryComponent->FindItemArrayWithModifier(LocalItems, LocalStatus);
 	if (!LocalItems.IsEmpty())

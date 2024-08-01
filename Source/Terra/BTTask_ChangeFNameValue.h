@@ -6,22 +6,19 @@
 #include "CoreMinimal.h"
 #include "BehaviorTree/Tasks/BTTask_BlackboardBase.h"
 #include "BehaviorTree/BlackboardComponent.h"
-#include "BTTask_FindAllSCActorsByID.generated.h"
+#include "BTTask_ChangeFNameValue.generated.h"
 
-/**
- * 
- */
+
 UCLASS()
-class TERRA_API UBTTask_FindAllSCActorsByID : public UBTTask_BlackboardBase
+class TERRA_API UBTTask_ChangeFNameValue : public UBTTask_BlackboardBase
 {
 	GENERATED_BODY()
 	
 public:
-	UBTTask_FindAllSCActorsByID();
+	UBTTask_ChangeFNameValue();
 
 	virtual EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
-
-	UPROPERTY(EditAnywhere, Category = "Blackboard")
-	FBlackboardKeySelector CharacterKey;
 	
+	UPROPERTY(EditAnywhere, Category = "Parameters")
+	FName FNameValue;
 };

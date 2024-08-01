@@ -22,6 +22,18 @@ enum EMarkType
 	Animals,
 };
 
+USTRUCT(BlueprintType)
+struct FSHerbCreation : public FTableRowBase
+{
+	GENERATED_USTRUCT_BODY()
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	TMap<FName, float> ItemsGiven;
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	float GatherDuration;
+};
+
 UCLASS()
 class TERRA_API AInteractionMark : public AActor
 {
@@ -35,6 +47,8 @@ protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
+	TSubclassOf<class AInteractableActor> TakeOneFromActorArray();
+
 public:	
 	// Called every frame
 
@@ -45,4 +59,6 @@ public:
 	TEnumAsByte<EMarkType> MarkType;
 	UPROPERTY(EditAnywhere)
 	TArray<TSubclassOf<class AInteractableActor>> ActorsToSpawn; // Game will chose one of them, but all must appear on the map
+
+	TArray<AInteractableActor*> ThisMarkActors;
 };

@@ -16,6 +16,8 @@
 
 class ATimeActor;
 class ASocialCell;
+class AInteractionMark;
+class AInteractableActor;
 
 UENUM(BlueprintType)
 enum class ECharacterStatus
@@ -42,8 +44,17 @@ public:
 	void InitInventoryComponent();
 	void InitStatusComponent();
 	void UpdateCharacterMovement();
+	float CalculatePathDuration(const FVector& PathStart, const FVector& PathEnd);
+
+	UFUNCTION(BlueprintCallable)
+	void TargetActorsPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus);
 
 	AActor* FindClosetstActorFromArray(TArray<AActor*> ActorArray);
+
+	// Interactions
+
+	// bFunction type: 0 - End Interaction, 1 - Began Interaction
+	void ChangeCharacterInteractionStatus(bool bFunctionType);
 
 	/** Returns TopDownCameraComponent subobject **/
 	FORCEINLINE class UCameraComponent* GetTopDownCameraComponent() const { return TopDownCameraComponent; }
@@ -66,6 +77,8 @@ public:
 	UDataTable* DT_Skills;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, meta = (RowType = "DT Items"));
 	UDataTable* DT_Items;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, meta = (RowType = "DT Herbs"));
+	UDataTable* DT_Herbs;
 	
 	// Тут задаються стандартні значення різних модифікаторів. Вони потім корегується скілами та іншим.
 	// Наприклад: Яке карго стандартне, та інше.
@@ -74,12 +87,20 @@ public:
 
 	// Social Cell
 	TMap<FName, float> RequestMap;
-	FName Activities;
+	FName Activity;
 
 	ATimeActor* TimeActor;
 	ASocialCell* SocialCell;
 
+	TMap<FName, TArray<AInteractableActor*>> InteractableActors;
+	TMap<FName, TArray<AInteractionMark*>> MarksActor;
+
 	TArray<AActor*> LocalArray;
+
+	// Interactions
+	FTimerHandle InteractionTimerHandle;
+	FTimerHandle InteractionAddRotTimerHandle;
+	bool bIsInteracted;
 
 private:
 	/** Top down camera */

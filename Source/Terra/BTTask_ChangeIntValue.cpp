@@ -11,6 +11,8 @@
 UBTTask_ChangeIntValue::UBTTask_ChangeIntValue()
 {
 	NodeName = "Change Int Value";
+
+	BlackboardKey.AddIntFilter(this, GET_MEMBER_NAME_CHECKED(UBTTask_ChangeIntValue, BlackboardKey));
 }
 
 EBTNodeResult::Type UBTTask_ChangeIntValue::ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
@@ -18,14 +20,14 @@ EBTNodeResult::Type UBTTask_ChangeIntValue::ExecuteTask(UBehaviorTreeComponent& 
 	Super::ExecuteTask(OwnerComp, NodeMemory);
 	
 	int LocalInt;
-	LocalInt = OwnerComp.GetBlackboardComponent()->GetValueAsInt(IntKey.SelectedKeyName);
+	LocalInt = OwnerComp.GetBlackboardComponent()->GetValueAsInt(BlackboardKey.SelectedKeyName);
 
-	if (bRandomValue == EBool::Yes)
+	if (RandomValue == EBool::Yes)
 	{
 		Value = FMath::RandRange(0, Value);
 	}
 
-	if (bSetValue == EBool::Yes)
+	if (SetValue == EBool::Yes)
 	{
 		LocalInt = Value;
 	}
@@ -35,7 +37,7 @@ EBTNodeResult::Type UBTTask_ChangeIntValue::ExecuteTask(UBehaviorTreeComponent& 
 	}
 
 
-	OwnerComp.GetBlackboardComponent()->SetValueAsInt(IntKey.SelectedKeyName, LocalInt);
+	OwnerComp.GetBlackboardComponent()->SetValueAsInt(BlackboardKey.SelectedKeyName, LocalInt);
 
 	return EBTNodeResult::Succeeded;
 }

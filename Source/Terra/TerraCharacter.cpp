@@ -1,5 +1,12 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
+// TODO 
+// I dont know why, but in CalculatePathDuration func, GetPathLength doesnt work properly, sometimes have shortcuts and another.
+// Good thing that it always add distance. That not ideal, but better than remove it
+// Problem in that: 500 points -> takes one step, nothing but distance changed -> 1000 point
+// Also this feature has a very conditional character speed. Then I'll finish it
+// Cursed function :D
+
 #include "TerraCharacter.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Camera/CameraComponent.h"
@@ -11,6 +18,11 @@
 #include "GameFramework/Character.h"
 #include "Materials/Material.h"
 #include "Engine/World.h"
+#include "InteractionMark.h"
+#include "InteractableActor.h"
+#include "Perception/AIPerceptionComponent.h"
+#include "NavigationSystem.h"
+#include "SocialCell.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "TimeActor.h"
 
@@ -58,10 +70,6 @@ ATerraCharacter::ATerraCharacter()
 	StatusComponent = CreateDefaultSubobject<UStatusComponent>(FName("Status Component"));
 	StatusComponent->RegisterComponent();
 	StatusComponent->Character = this;
-
-	
-
-	
 }
 
 void ATerraCharacter::Tick(float DeltaSeconds)
@@ -72,6 +80,7 @@ void ATerraCharacter::Tick(float DeltaSeconds)
 	LocalString = "Hunger";
 	LocalString.Append("DecayBonusValue");
 
+
 	if(!GetController()->IsPlayerController())
 	{
 		TArray<FSItem> LocalItems;
@@ -81,11 +90,11 @@ void ATerraCharacter::Tick(float DeltaSeconds)
 
 		if (LocalItem != InventoryComponent->NoneItem)
 		{
-			GEngine->AddOnScreenDebugMessage(1, 1.0f, FColor::Cyan, FString::FromInt(*InventoryComponent->Inventory.Find(LocalItem)));
+			GEngine->AddOnScreenDebugMessage(92, 1.0f, FColor::Cyan, FString::FromInt(*InventoryComponent->Inventory.Find(LocalItem)));
 		}
 		else
 		{
-			GEngine->AddOnScreenDebugMessage(1, 1.0f, FColor::Cyan, "0");
+			GEngine->AddOnScreenDebugMessage(92, 1.0f, FColor::Cyan, "0");
 		}
 
 		InventoryComponent->Inventory.GenerateKeyArray(LocalItems);
@@ -93,17 +102,23 @@ void ATerraCharacter::Tick(float DeltaSeconds)
 
 		if (LocalItem != InventoryComponent->NoneItem)
 		{
-			GEngine->AddOnScreenDebugMessage(2, 1.0f, FColor::Orange, FString::FromInt(*InventoryComponent->Inventory.Find(LocalItem)));
+			GEngine->AddOnScreenDebugMessage(93, 1.0f, FColor::Orange, FString::FromInt(*InventoryComponent->Inventory.Find(LocalItem)));
 		}
 		else
 		{
-			GEngine->AddOnScreenDebugMessage(2, 1.0f, FColor::Orange, "0");
+			GEngine->AddOnScreenDebugMessage(93, 1.0f, FColor::Orange, "0");
 		}
 
 		float LocalWeight = *Modifiers.Find("Weight");
 
-		GEngine->AddOnScreenDebugMessage(91, 1.0f, FColor::Cyan, FString::SanitizeFloat(LocalWeight));
+		GEngine->AddOnScreenDebugMessage(91, 1.0f, FColor::Purple, FString::FromInt(bIsInteracted));
 	}
+
+	/*
+	if (GetController()->IsPlayerController())
+	{
+		
+	}*/
 } 
 
 void ATerraCharacter::BeginPlay()
@@ -123,8 +138,6 @@ void ATerraCharacter::BeginPlay()
 	ProgressionComponent->AddXPToAttribute("gathering", 200);
 
 	InventoryComponent->RecalculateInventoryModifierBonuses();
-
-	
 }
 
 void ATerraCharacter::InitProgressionComponent()
@@ -152,9 +165,12 @@ void ATerraCharacter::UpdateCharacterMovement()
 	float NewMovementSpeed;
 	NewMovementSpeed = *Modifiers.Find("MovementSpeedBase");
 	NewMovementSpeed *= *Modifiers.Find("MovementSpeedModifier");
-	NewMovementSpeed *= *Modifiers.Find("MovementSpeedCargoModifier");  
+	NewMovementSpeed *= *Modifiers.Find("MovementSpeedCargoModifier");
 
 	GetCharacterMovement()->MaxWalkSpeed = NewMovementSpeed;
+
+	GetCharacterMovement()->MaxAcceleration = *Modifiers.Find("MovementAccelerationBase");
+	
 }
 
 void ATerraCharacter::Init()
@@ -171,20 +187,16 @@ void ATerraCharacter::Init()
 
 	TArray<AActor*> TimeActorArray;
 	UGameplayStatics::GetAllActorsOfClass(GetWorld(), ATimeActor::StaticClass(), TimeActorArray);
-	TimeActor = Cast<ATimeActor>(TimeActorArray[0]); 
+	TimeActor = Cast<ATimeActor>(TimeActorArray[0]);
 
 	TimeActor->AddCharacterToArray(this);
-	
-	
+
+
 	if (GetController())
 	{
 		GetCharacterMovement()->bOrientRotationToMovement = true;
-
-		GEngine->AddOnScreenDebugMessage(10378, 1.0f, FColor::Cyan, "Ave");
 	}
 }
-
-
 
 AActor* ATerraCharacter::FindClosetstActorFromArray(TArray<AActor*> ActorArray)
 {
@@ -209,4 +221,100 @@ AActor* ATerraCharacter::FindClosetstActorFromArray(TArray<AActor*> ActorArray)
 	{
 		return 0;
 	}
+}
+
+void ATerraCharacter::TargetActorsPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
+{
+	if (Actor && Actor->IsA<AInteractableActor>())
+	{
+		AInteractableActor* LocalIA;
+		LocalIA = Cast<AInteractableActor>(Actor);
+
+
+		// Add InteractableMark through InteractableActor to MarksActor
+		// TODO, It must recalc all MarkActor if Gathering or ther shit where this type of mark used for
+		if (LocalIA->InteractionComponent->ReferencedActor && LocalIA->InteractionComponent->ReferencedActor->IsA<AInteractionMark>())
+		{
+			AInteractionMark* LocalIM;
+			LocalIM = Cast<AInteractionMark>(LocalIA->InteractionComponent->ReferencedActor);
+
+			FString LocalString;
+			LocalString = UEnum::GetValueAsString(LocalIA->InteractionComponent->InteractID);
+			LocalString.Append(";");
+			LocalString.Append(LocalIA->InteractionComponent->AdditionalInfo.ToString());
+
+			TArray<AInteractionMark*> LocalIMArray;
+			if (MarksActor.Contains(*LocalString))
+			{
+				LocalIMArray = *MarksActor.Find(*LocalString);
+			}
+			
+			if (!LocalIMArray.Contains(LocalIA->InteractionComponent->ReferencedActor))
+			{
+				LocalIMArray.Add(LocalIM);
+				MarksActor.Add(*LocalString, LocalIMArray);
+
+				return;
+			}
+		}
+
+		UE_LOG(LogTemp , Error, TEXT("Activity: %s"), *Activity.ToString());
+
+		if (Activity != "None")
+		{
+			FSActivitiesCreation* ActivitiesDataFromDT;
+			ActivitiesDataFromDT = SocialCell->DT_Acitivites->FindRow<FSActivitiesCreation>(Activity, TEXT("none"), false);
+
+			// If this IA is part of Activity going to Mark. Character will change ActivityStatus and LocalObject of BT become a LocalIA
+			if (!ActivitiesDataFromDT->MarkForActivities.IsEmpty())
+			{
+
+				if (UAIBlueprintHelperLibrary::GetBlackboard(this)->GetValueAsObject("LocalObject")->IsA<AInteractionMark>())
+				{
+					AInteractionMark* LocalIM;
+					LocalIM = Cast<AInteractionMark>(UAIBlueprintHelperLibrary::GetBlackboard(this)->GetValueAsObject("LocalObject"));
+
+					if (LocalIM->ThisMarkActors.Contains(LocalIA))
+					{
+						UAIBlueprintHelperLibrary::GetBlackboard(this)->SetValueAsObject("LocalObject", LocalIA);
+						UAIBlueprintHelperLibrary::GetBlackboard(this)->SetValueAsInt("ActivityInt", 1);
+					}
+				}
+			}
+		}
+	}
+}
+
+float ATerraCharacter::CalculatePathDuration(const FVector& PathStart, const FVector& PathEnd) // Return duration in seconds, basen on length / speed. Approximately. + a few seconds of measurement error that is, if it should actually be 1, it will give 1.2.
+{
+	float PathLength; 
+	UNavigationSystemV1* NavSystem = UNavigationSystemV1::GetNavigationSystem(this->GetWorld());
+	
+	NavSystem->GetPathLength(PathStart, PathEnd, PathLength);
+
+	// Length 
+
+	return PathLength / (GetCharacterMovement()->MaxWalkSpeed / 4);
+}
+
+
+
+// Interactions
+
+void ATerraCharacter::ChangeCharacterInteractionStatus(bool bFunctionType)
+{
+	bIsInteracted = bFunctionType;
+
+	if (bFunctionType)
+	{
+		GetCharacterMovement()->SetMovementMode(MOVE_None);
+
+		GEngine->AddOnScreenDebugMessage(208, 1.0f, FColor::Emerald, "Minusspeed");
+	}
+	else
+	{
+		GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+	}
+
+	
 }

@@ -56,4 +56,7 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, meta = (RowType = "DT Items"));
 	UDataTable* DT_Items;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, meta = (RowType = "DT Herbs"));
+	UDataTable* DT_Herbs;
 };

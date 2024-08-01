@@ -22,14 +22,11 @@ public:
 
 	virtual EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
 
-	UPROPERTY(EditAnywhere, Category = "Blackboard")
-	FBlackboardKeySelector IntKey;
+	UPROPERTY(EditAnywhere, Category = "Parameters")
+	TEnumAsByte<EBool> SetValue; // If "Yes", instead of adding to Value, it will be set
 
 	UPROPERTY(EditAnywhere, Category = "Parameters")
-	TEnumAsByte<EBool> bSetValue; // If "Yes", instead of adding to Value, it will be set
-
-	UPROPERTY(EditAnywhere, Category = "Parameters")
-	TEnumAsByte<EBool> bRandomValue; // If "Yes", range will be [0;Value]
+	TEnumAsByte<EBool> RandomValue; // If "Yes", range will be [0;Value]
 
 	UPROPERTY(EditAnywhere, Category = "Parameters")
 	int Value; 

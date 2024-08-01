@@ -67,7 +67,10 @@ FSItem UInventoryComponent::CreateItem(FName ID, int Quantity, bool bIgnoreCargo
 	LocalItem.Durability = ItemDataFromDT->MaxDurability;
 	LocalItem.Active = 0;
 	
-	AddItemToInventory(LocalItem, Quantity, bIgnoreCargo);
+	if (Quantity != 0)
+	{
+		AddItemToInventory(LocalItem, Quantity, bIgnoreCargo);
+	}
 
 	return LocalItem;
 }
@@ -468,6 +471,7 @@ FSItem UInventoryComponent::CalculateModifiersBasedOnDurability(FSItem Item)
 	}
 	else
 	{
+		/*
 		if (Percent > 0.5)
 		{
 			for (auto& Pair : ItemDataFromDT->ModifierBonuses)
@@ -487,6 +491,25 @@ FSItem UInventoryComponent::CalculateModifiersBasedOnDurability(FSItem Item)
 
 				LocalItem.ModifierBonuses.Add(Pair.Key, Value);
 			}
+		}
+		*/
+
+		TMap<FName, float> LocalModifierBonuses;
+
+		for (auto& Pair : ItemDataFromDT->ModifierBonuses)
+		{
+			if (ItemDataFromDT->ModifierBonusesOnLowDurability.Contains(Pair.Key))
+			{
+				LocalModifierBonuses.Add(Pair.Key, Pair.Value - *ItemDataFromDT->ModifierBonusesOnLowDurability.Find(Pair.Key));
+			}
+			else
+			{
+				LocalModifierBonuses.Add(Pair.Key, Pair.Value);
+			}
+		}
+		for (auto& Pair : LocalModifierBonuses)
+		{
+			LocalItem.ModifierBonuses.Add(Pair.Key, Pair.Value * Percent + *ItemDataFromDT->ModifierBonusesOnLowDurability.Find(Pair.Key));
 		}
 	}
 
@@ -565,6 +588,20 @@ void UInventoryComponent::CalculateModifiers(TMap<FName, float> ModifierBonuses,
 			}
 		}
 	}
+}
+
+TMap<FName, float> UInventoryComponent::CalculateItemModifiersDurabilityBasedOnSeconds(FName ItemID, float Seconds)
+{
+	FSItem LocalItem;
+	LocalItem =	CreateItem(ItemID, 0, true);
+
+	LocalItem.Durability -= Seconds;
+	if (LocalItem.Durability < 0)
+	{
+		LocalItem.Durability = 0;
+	}
+
+	return CalculateModifiersBasedOnDurability(LocalItem).ModifierBonuses;
 }
 
 ///////////////////////////////////////////////////

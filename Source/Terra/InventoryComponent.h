@@ -52,7 +52,7 @@ struct FSItemCreation : public FTableRowBase
 	TMap<FName, float> ModifierBonusesOnLowDurability;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere)
-	bool bStaticBonuses;
+	bool bStaticBonuses; // If true -> Modifier Bonus alwaus be ModifierBonus
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere)
 	int EffectDuration;
@@ -176,6 +176,8 @@ public:
 	float CalculateModifiersBasedOnLevelRequirement(FSItem Item);
 	FSItem CalculateModifiersBasedOnDurability(FSItem Item);
 	void CalculateModifiers(TMap<FName, float> Modifiers, bool bSubtractInsteadOfAdd = false);
+
+	TMap<FName, float> CalculateItemModifiersDurabilityBasedOnSeconds(FName ItemID, float Seconds); // Return Modifiers which based on durability minus Seconds
 
 	////////////////////////////
 

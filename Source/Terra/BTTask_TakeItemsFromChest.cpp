@@ -19,7 +19,6 @@ EBTNodeResult::Type UBTTask_TakeItemsFromChest::ExecuteTask(UBehaviorTreeCompone
 	Super::ExecuteTask(OwnerComp, NodeMemory);
 
 	ATerraCharacter* LocalCharacter = Cast<ATerraCharacter>(OwnerComp.GetBlackboardComponent()->GetValueAsObject(CharacterKey.SelectedKeyName));
-	float LocalVafla = *LocalCharacter->Modifiers.Find("Weight");
 	AInteractableActor* LocalChest = Cast<AInteractableActor>(OwnerComp.GetBlackboardComponent()->GetValueAsObject(ChestActorKey.SelectedKeyName));
 
 	float LocalStatusValueLeft;
@@ -93,7 +92,6 @@ EBTNodeResult::Type UBTTask_TakeItemsFromChest::ExecuteTask(UBehaviorTreeCompone
 
 	default:
 		
-
 		break;
 	}
 	

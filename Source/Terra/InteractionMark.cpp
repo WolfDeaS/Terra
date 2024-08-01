@@ -18,10 +18,13 @@ void AInteractionMark::BeginPlay()
 
 	// Only for Herb
 	
-	SpawnActorClass = ActorsToSpawn[0];
+	SpawnActorClass = TakeOneFromActorArray();
 	if (SpawnActorClass)
 	{
 		SpawnActor = GetWorld()->SpawnActor<AInteractableActor>(SpawnActorClass, this->GetTargetLocation(), this->GetActorRotation());
+		SpawnActor->InteractionComponent->ReferencedActor = this;
+
+		ThisMarkActors.Add(SpawnActor);
 		/*
 		SpawnActor->InteractionComponent->InteractID = EInteractID::Herb;
 
@@ -36,3 +39,11 @@ void AInteractionMark::BeginPlay()
     
 }
 
+TSubclassOf<class AInteractableActor> AInteractionMark::TakeOneFromActorArray()
+{
+	// We take Num of Array, and -1 cause this way we get all indexes of ActorsToSpawn array
+	int LocalInt = ActorsToSpawn.Num();
+	LocalInt--;
+
+	return ActorsToSpawn[FMath::RandRange(0, LocalInt)];
+}

@@ -12,6 +12,7 @@ AInteractableActor::AInteractableActor()
 	
 	InteractionComponent = CreateDefaultSubobject<UInteractionComponent>(FName("InteractionComponent"));
 	InteractionComponent->RegisterComponent();
+	InteractionComponent->ActorREF = this;
 
 	LocalSceneComponent = CreateDefaultSubobject<USceneComponent>(TEXT("Local Scene Component"));
 	RootComponent = LocalSceneComponent;

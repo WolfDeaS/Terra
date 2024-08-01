@@ -27,6 +27,7 @@ EBTNodeResult::Type UBTTask_FindNearestActor::ExecuteTask(UBehaviorTreeComponent
 	OwnerComp.GetBlackboardComponent()->SetValueAsObject(NearestActorOutputKey.SelectedKeyName, Cast<UObject>(ClosetActor));
 
 	OwnerComp.GetBlackboardComponent()->SetValueAsVector(NearestActorLocationOutputKey.SelectedKeyName, ClosetActor->GetTargetLocation());
-
+	
+	FinishLatentTask(OwnerComp, EBTNodeResult::Succeeded);
 	return EBTNodeResult::Succeeded;
 }

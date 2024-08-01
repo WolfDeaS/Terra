@@ -12,6 +12,9 @@
 UBTTask_FindAllSCActorsByID::UBTTask_FindAllSCActorsByID()
 {
 	NodeName = "Find All Social Cell Interactable Actors By ID";
+
+	CharacterKey.AddObjectFilter(this, GET_MEMBER_NAME_CHECKED(UBTTask_FindAllSCActorsByID, CharacterKey), AActor::StaticClass());
+	BlackboardKey.AddNameFilter(this, GET_MEMBER_NAME_CHECKED(UBTTask_FindAllSCActorsByID, BlackboardKey));
 }
 
 EBTNodeResult::Type UBTTask_FindAllSCActorsByID::ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
@@ -20,7 +23,8 @@ EBTNodeResult::Type UBTTask_FindAllSCActorsByID::ExecuteTask(UBehaviorTreeCompon
 
 	ATerraCharacter* LocalCharacter = Cast<ATerraCharacter>(OwnerComp.GetBlackboardComponent()->GetValueAsObject(CharacterKey.SelectedKeyName));
 	
-	FName LocalName = OwnerComp.GetBlackboardComponent()->GetValueAsName(FindActorIDKey.SelectedKeyName);
+	LocalCharacter->LocalArray.Empty();
+	FName LocalName = OwnerComp.GetBlackboardComponent()->GetValueAsName(BlackboardKey.SelectedKeyName);
 	LocalCharacter->LocalArray.Append(*LocalCharacter->SocialCell->InteractableActors.Find(LocalName));
 
 	return EBTNodeResult::Succeeded;

@@ -43,6 +43,8 @@ protected:
 public:
 	// Called every frame
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	void HerbTimer(ATerraCharacter* LocalCharacter);
+	void ItemsMustRot(ATerraCharacter* LocalCharacter);
 
 	virtual void OnInteractionBegan(ATerraCharacter* LocalCharacter);
 	virtual void OnInteractionEnd();
@@ -75,8 +77,16 @@ public:
 	UPROPERTY(EditAnywhere, meta = (EditCondition = "GainXP == EBool::Yes", EditConditionHides))
 	int AttributeXPAmount;
 
+	// Mark, or other Actors that can be affect on. For example, lever and gate will REFActor
+	AActor* ReferencedActor;
 
+	UPROPERTY(EditDefaultsOnly)
+	FName AdditionalInfo;
+
+	// Itself
 	AInteractableActor* ActorREF;
+	
 	FSItem LocalItem;
+	TArray<FName> ItemsID;
 	bool bIsDurabilityDecay;
 };
