@@ -6,6 +6,7 @@
 #include "Components/ActorComponent.h"
 #include "StatusComponent.generated.h"
 
+class AInteractionMark;
 USTRUCT(BlueprintType)
 struct FSStatusCreation : public FTableRowBase
 {
@@ -62,6 +63,8 @@ public:
 	void UpdateStatuses();
 	void RemoveStatusModifiers(FName LocalStatus, float Value);
 	void AddStatusModifiers(FName LocalStatus, float Value);
+	bool CanMarkRestoreStatus(AInteractionMark* Mark, FName StatusID);
+	TMap<FName, float> GetStatusesNeed();
 
 	FName GetMostPriorityDebuffStatus();
 	TArray<FName> GetDebuffStatuses();

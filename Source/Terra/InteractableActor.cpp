@@ -71,6 +71,24 @@ void AInteractableActor::BeginPlay()
 
 		InteractionComponent->ActorREF = this;
 	}
+	else if (InteractionComponent->InteractID == EInteractID::BeverageContainer)
+	{
+		InventoryComponent->DT_Items = DT_Items;
+		InventoryComponent->Init();
+
+		InteractionComponent->ActorREF = this;
+
+		FSItem LocalFuncItem = InventoryComponent->CreateItem("beveragecontainer", 0, true);
+
+
+		LocalFuncItem.ModifierBonuses.Add("Capacity", InteractionComponent->Capacity);
+		LocalFuncItem.ModifierBonuses.Add("TimeToFill", InteractionComponent->TimeToFill);
+		LocalFuncItem.ModifierBonuses.Add("MinTimeToFill", InteractionComponent->MinTimeToFill);
+
+		LocalFuncItem.CapacityModifier = InteractionComponent->BasicCapacityModifier;
+
+		InventoryComponent->AddItemToInventory(LocalFuncItem, 1, true);
+	}
 }
 
 // Called every frame

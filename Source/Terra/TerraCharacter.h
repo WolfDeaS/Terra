@@ -8,7 +8,7 @@
 #include "InventoryComponent.h"
 #include "StatusComponent.h"
 #include "Components/WidgetComponent.h"
-#include "WHUD.h"
+#include "Widgets/WHUD.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Blueprint/AIBlueprintHelperLibrary.h"
@@ -46,10 +46,12 @@ public:
 	void UpdateCharacterMovement();
 	float CalculatePathDuration(const FVector& PathStart, const FVector& PathEnd);
 
+
+
 	UFUNCTION(BlueprintCallable)
 	void TargetActorsPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus);
 
-	AActor* FindClosetstActorFromArray(TArray<AActor*> ActorArray);
+	static AActor* FindClosetstActorFromArray(TArray<AActor*> ActorArray, AActor* TargetActor);
 
 	// Interactions
 
@@ -79,7 +81,10 @@ public:
 	UDataTable* DT_Items;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, meta = (RowType = "DT Herbs"));
 	UDataTable* DT_Herbs;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, meta = (RowType = "DT Beverage"));
+	UDataTable* DT_Beverage;
 	
+
 	// Тут задаються стандартні значення різних модифікаторів. Вони потім корегується скілами та іншим.
 	// Наприклад: Яке карго стандартне, та інше.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, meta = (RowType = "Modifiers"));

@@ -114,6 +114,24 @@ float ASocialCell::GetStatusConsumeAtSecond(FName Status)
 	return LocalValue;
 }
 
+float ASocialCell::GetStatusConsueAtDay(FName Status)
+{
+	float LocalValue = 0.0f;
+	FString LocalString;
+	FString AnotherLocalString;
+
+	for (auto& LocalCharacter : Characters)
+	{
+		LocalString = Status.ToString();
+		LocalString.Append("Decay");
+		AnotherLocalString = Status.ToString();
+		AnotherLocalString.Append("DebuffsStarts");
+		LocalValue += (LocalCharacter->TimeActor->DayLengthInRealSeconds * *LocalCharacter->Modifiers.Find(*LocalString)) + *LocalCharacter->Modifiers.Find(*AnotherLocalString);
+	}
+
+	return LocalValue;
+}
+
 /// Interactions with characters ///
 
 void ASocialCell::GiveTasks()
@@ -182,6 +200,7 @@ void ASocialCell::GiveTasks()
 				float DecayStatusInSecond = -1.0f;
 
 				
+				/// TODO: ONLY FOR HERBS
 
 				// Key = Mark ID with Add Info
 				// Value = Marks Array
@@ -288,15 +307,71 @@ void ASocialCell::GiveTasks()
 				if (StatusDataFromDT->bIsRoamingNeededToRestore)
 				{
 					TArray<ATerraCharacter*> ArrayToDelete;
+					float LocalValue = -1.0f;
+					AInteractionMark* LocalIM = nullptr;
+					TArray<AInteractionMark*> NearestToObjectMarks;
+					TArray<AActor*> LocalIMForStatus;
+
+					TArray<AActor*> LocalActors;
+					UGameplayStatics::GetAllActorsOfClass(GetWorld(), ATimeActor::StaticClass(), LocalActors);
+					ATimeActor* LocalTimeActor = Cast<ATimeActor>(LocalActors[0]);
+
+					const TArray<AInteractionMark*> AllIMForStatus = LocalTimeActor->GetAllMarksForStatus(Pair.Key);
+					
+					// Casting to AActor*, cause i need it
+					for (auto& LocalMark : AllIMForStatus)
+					{
+						LocalIMForStatus.Add(Cast<AActor>(LocalMark));
+					}
+
+					// We take 5 nearest for future calculations
+					for (size_t i = 0; i < 5; i++)
+					{
+						AActor* LocalActor = ATerraCharacter::FindClosetstActorFromArray(LocalIMForStatus, this);
+						NearestToObjectMarks.Add(Cast<AInteractionMark>(LocalActor));
+						LocalIMForStatus.Remove(LocalActor);
+
+						if (LocalIMForStatus.IsEmpty())
+						{
+							break;
+						}
+					}
+
+					
+
+					// Find more effecient Mark
+					for (auto& LocalMark : NearestToObjectMarks)
+					{
+						if (GetEfficencyMarkValue(LocalMark, 1, Pair.Key) > LocalValue)
+						{
+							LocalValue = GetEfficencyMarkValue(LocalMark, 1, Pair.Key);
+							LocalIM = LocalMark;
+							UE_LOG(LogTemp, Warning, TEXT("Give Task, Local Mark: Add"));
+							UE_LOG(LogTemp, Warning, TEXT("Give Task, Local Mark: LocalValue, %f"), LocalValue);
+						}
+					}
+
+					// If we couldnt find effecient mark, we find effecient from all across the map
+					if (LocalValue <= 0)
+					{
+						for (auto& LocalMark : AllIMForStatus)
+						{
+							if (GetEfficencyMarkValue(LocalMark, 1, Pair.Key) > LocalValue)
+							{
+								LocalValue = GetEfficencyMarkValue(LocalMark, 1, Pair.Key);
+								LocalIM = LocalMark;
+							}
+						}
+					}
 
 					for (auto& LocalCharacter : CharactersOutOfActivities)
 					{
 						ArrayToDelete.Add(LocalCharacter);
 
-						ChangeCharacterWorkStatus(0, false, LocalCharacter, nullptr, "RoamingForStatus", Pair.Key);
+						ChangeCharacterWorkStatus(0, false, LocalCharacter, Cast<AActor>(LocalIM), "RoamingForStatus", Pair.Key);
 
 						// Evenly distribute requests
-						//LocalCharacter->RequestMap.Add(Pair.Key, Pair.Value / CharactersOutOfActivities.Num());
+						LocalCharacter->RequestMap.Add(Pair.Key, Pair.Value / CharactersOutOfActivities.Num());
 					}
 					for (auto& LocalCharacter : ArrayToDelete)
 					{
@@ -309,7 +384,7 @@ void ASocialCell::GiveTasks()
 }
 
 //bFunctionType to make Character: 0 - Working, 1 - ReturnToSC 2 - Rest.
-// bDeleteItemFromCharactersArray - Means delete character from CharactersOutOfActivities if bFunctionType 1. Or delete character from CharactersActivities if bFunctionType 0
+//bDeleteItemFromCharactersArray - Means delete character from CharactersOutOfActivities if bFunctionType 1. Or delete character from CharactersActivities if bFunctionType 0
 void ASocialCell::ChangeCharacterWorkStatus(uint8 FunctionType, bool bDeleteItemFromCharactersArray, ATerraCharacter* LocalCharacter, UObject* ObjectForWorking, FName ActivityInfo, FName AddInfo)
 {
 	TArray<ATerraCharacter*> LocalCharactersArray;
@@ -330,7 +405,7 @@ void ASocialCell::ChangeCharacterWorkStatus(uint8 FunctionType, bool bDeleteItem
 
 		if (ObjectForWorking)
 		{
-			UAIBlueprintHelperLibrary::GetBlackboard(LocalCharacter)->SetValueAsObject("LocalObject", ObjectForWorking);
+			UAIBlueprintHelperLibrary::GetBlackboard(LocalCharacter)->SetValueAsObject("ActivityObject", ObjectForWorking);
 		}
 
 		if (CharactersActivities.Contains(ActivityInfo))
@@ -594,13 +669,17 @@ ATerraCharacter* ASocialCell::GetSlowestCharacter()
 
 bool ASocialCell::IsCharacterHaveRequestItems(ATerraCharacter* LocalCharacter)
 {
+	TMap<FName,float> LocalItemModifierBonuses;
+
 	for (auto& SCRequestPair : RequestMap)
 	{
 		for (auto& LocalItem : LocalCharacter->InventoryComponent->Inventory)
 		{
-			if (LocalItem.Key.ModifierBonuses.Contains(SCRequestPair.Key))
+			LocalItemModifierBonuses = LocalCharacter->InventoryComponent->CalculateModifiersBasedOnDurability(LocalItem.Key);
+
+			if (LocalItemModifierBonuses.Contains(SCRequestPair.Key))
 			{
-				if (*LocalItem.Key.ModifierBonuses.Find(SCRequestPair.Key) > 0.0f)
+				if (*LocalItemModifierBonuses.Find(SCRequestPair.Key) > 0.0f)
 				{
 					return true;
 				}
@@ -609,6 +688,115 @@ bool ASocialCell::IsCharacterHaveRequestItems(ATerraCharacter* LocalCharacter)
 	}
 
 	return false;
+}
+
+//TODO: ONLY FOR HERBS
+//bFunctionType to Get Value based on: 0 - One Character, 1 - AllCharacters.
+float ASocialCell::GetEfficencyMarkValue(AInteractionMark* LocalMark, bool bFunctionType, FName Status)
+{
+	float LocalValue = -10000.0f;
+	float LocalGrowthStatusInSecond = -1.0f;
+	float LocalDecayStatusInSecond = -1.0f;
+	float LocalGrowthStatus = 0.0f;
+	AInteractionMark* OutputMark = nullptr;
+	
+	FName LocalMarkID = LocalMark->ThisMarkActors[0]->InteractionComponent->AdditionalInfo;
+	FSHerbCreation* HerbDataFromDT;
+	FSItemCreation* ItemDataFromDT;
+
+	TMap<FName, float> LocalModifierBonuses;
+
+	float GrowthStatusInSecond = -1.0f;
+	float DecayStatusInSecond = -1.0f;
+
+	HerbDataFromDT = DT_Herb->FindRow<FSHerbCreation>(LocalMarkID, TEXT("none"), false);
+
+	const float Time = GetSlowestCharacter()->CalculatePathDuration(this->GetActorLocation(), LocalMark->GetActorLocation());
+
+	for (auto& LocalItemPair : HerbDataFromDT->ItemsGiven)
+	{
+		ItemDataFromDT = DT_Items->FindRow<FSItemCreation>(LocalItemPair.Key, TEXT("none"), false);
+		LocalModifierBonuses = Characters[0]->InventoryComponent->CalculateItemModifiersDurabilityBasedOnSeconds(LocalItemPair.Key, Time);
+
+		if (LocalModifierBonuses.Contains(Status))
+		{
+			LocalGrowthStatus += *LocalModifierBonuses.Find(Status) * LocalItemPair.Value;
+		}
+	}
+
+	LocalGrowthStatusInSecond = LocalGrowthStatus / Time;
+	LocalDecayStatusInSecond = ((GetStatusConsueAtDay(Status) + (Time * GetStatusConsumeAtSecond(Status))) * 1.25) / Characters[0]->TimeActor->DayLengthInRealSeconds;
+
+	LocalValue = LocalGrowthStatusInSecond - LocalDecayStatusInSecond;
+	GrowthStatusInSecond = LocalGrowthStatusInSecond;
+	DecayStatusInSecond = LocalDecayStatusInSecond;
+	
+
+	if (!bFunctionType)
+	{
+		LocalValue += LocalGrowthStatusInSecond * (Characters.Num() - 1);
+	}
+
+	return LocalValue;
+}
+
+TArray<FName> ASocialCell::GetMarksIDForRestoreStatus(FName Status)
+{
+	FSStatusCreation* StatusDataFromDT;
+	StatusDataFromDT = Characters[0]->StatusComponent->DT_Statuses->FindRow<FSStatusCreation>(Status, TEXT("none"), false);
+	TArray<FName> LocalRows;
+	
+	TArray<FName> Output;
+	float LocalValue;
+	FString LocalString;
+
+	for (auto& LocalActivity : StatusDataFromDT->ActivitiesToRestore)
+	{
+		FSActivitiesCreation* ActivityDataFromDT;
+		ActivityDataFromDT = DT_Acitivites->FindRow<FSActivitiesCreation>(LocalActivity, TEXT("none"), false);
+
+		for (auto& LocalMark : ActivityDataFromDT->MarkForActivities)
+		{
+			switch (LocalMark)
+			{
+			case EMarkType::Herbs:
+
+				LocalRows = DT_Herb->GetRowNames();
+
+				for (auto& LocalHerb : LocalRows)
+				{
+					FSHerbCreation* HerbDataFromDT;
+					HerbDataFromDT = DT_Herb->FindRow<FSHerbCreation>(LocalHerb, TEXT("none"), false);
+
+					for (auto& LocalItemPair : HerbDataFromDT->ItemsGiven)
+					{
+						if(Characters[0]->InventoryComponent->GetUnitedModifierBonusesByItemID(LocalItemPair.Key).Contains(Status))
+						{
+							LocalValue += *Characters[0]->InventoryComponent->GetUnitedModifierBonusesByItemID(LocalItemPair.Key).Find(Status);
+						}
+					}
+
+					if (LocalValue > 0.0f)
+					{
+						LocalString.Append("Herbs;");
+						LocalString.Append(LocalHerb.ToString());
+
+						Output.Add(*LocalString);
+					}
+					LocalValue = 0.0f;
+				}
+
+				
+
+				break;
+			
+			default:
+				break;
+			}
+		}
+	}
+
+	return Output;
 }
 
 ///

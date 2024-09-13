@@ -25,8 +25,11 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/LocalPlayer.h"
 #include "Blueprint/UserWidget.h"
-#include "WCharacterMenu.h"
-#include "WHUD.h"
+#include "Widgets/WCharacterMenu.h"
+#include "InteractableRiver.h"
+#include "Widgets/WHUD.h"
+#include "WaterSplineComponent.h"
+#include "Kismet/KismetMathLibrary.h"
 #include "TerraPlayerController.generated.h"
 
 
@@ -87,7 +90,10 @@ public:
 
 	UPathFollowingComponent* PathFollowingComponent;
 
+	AInteractableRiver* InteractableRiver;
 	AInteractableActor* InteractableActor;
+
+	AInteractableRiver* MovedToInteractableRiver;
 	AInteractableActor* MovedToInteractableActor;
 
 	ATerraCharacter* Character;
@@ -136,11 +142,15 @@ protected:
 	void ChangeMainUIStatus();
 	void CloseInterfaceWithESC();
 
+	static FVector GetClosestPointOnSpline(USplineComponent* Spline, const FVector& Location);
+
 private:
 	FVector CachedDestination;
 
 	bool bIsTouch; // Is it a touch device
 	float FollowTime; // For how long it has been pressed
+
+	const TArray<float> STEPS_FOR_RIVER_FINDING = { 100.0f,10.0f,1.0f };
 
 	//const char* SetYAction;
 	//const char* SetXAction;

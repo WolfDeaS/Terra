@@ -4,6 +4,8 @@
 #include "StatusComponent.h"
 #include "TerraCharacter.h"
 #include "TerraPlayerController.h"
+#include "SocialCell.h"
+#include "InteractionMark.h"
 
 // Sets default values for this component's properties
 UStatusComponent::UStatusComponent()
@@ -345,4 +347,69 @@ void UStatusComponent::AddStatusModifiers(FName LocalStatus, float Value)
 	{
 		Cast<ATerraPlayerController>(Character->GetController())->HUD->UpdateStatusPB();
 	}
+}
+
+bool UStatusComponent::CanMarkRestoreStatus(AInteractionMark* Mark, FName StatusID)
+{
+	FString LocalMarkID = UEnum::GetValueAsString(Mark->MarkType);
+	LocalMarkID.Append(";");
+	LocalMarkID.Append(Mark->ThisMarkActors[0]->InteractionComponent->AdditionalInfo.ToString());
+
+	if (Character->SocialCell->GetMarksIDForRestoreStatus(StatusID).Contains(*LocalMarkID))
+	{
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+
+	return false;
+}
+
+TMap<FName, float> UStatusComponent::GetStatusesNeed()
+{
+	TMap<FName, float> Output;
+	FString LocalString;
+	float LocalValue = 0.0f;
+
+	for (auto& LocalStatus : Statuses)
+	{
+		FSStatusCreation* StatusDataFromDT;
+		StatusDataFromDT = DT_Statuses->FindRow<FSStatusCreation>(LocalStatus, TEXT("none"), false);
+
+		LocalString = LocalStatus.ToString();
+		LocalString.Append("DebuffsStarts");
+
+		if (Character->Modifiers.Contains(*LocalString))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Get Statuses Need: %s"), *LocalString);
+			LocalValue = *Character->Modifiers.Find(*LocalString);
+
+			if (*Character->Modifiers.Find(LocalStatus) < LocalValue)
+			{
+				Output.Add(LocalStatus, LocalValue - *Character->Modifiers.Find(LocalStatus));
+
+				UE_LOG(LogTemp, Warning, TEXT("Get Statuses Need: Debuffs Starts"));
+			}
+		}
+
+		LocalString = LocalStatus.ToString();
+		LocalString.Append("Max");
+		UE_LOG(LogTemp, Warning, TEXT("Get Statuses Need: !Output.Contains(LocalStatus) = %d"), !Output.Contains(LocalStatus));
+		
+		if (Character->Modifiers.Contains(*LocalString) && !Output.Contains(LocalStatus))
+		{
+			LocalValue = *Character->Modifiers.Find(*LocalString);
+
+			if (*Character->Modifiers.Find(LocalStatus) < LocalValue)
+			{
+				Output.Add(LocalStatus, LocalValue - *Character->Modifiers.Find(LocalStatus));
+
+				UE_LOG(LogTemp, Warning, TEXT("Get Statuses Need: Check Complete"));
+			}
+		}
+	}
+
+	return Output;
 }

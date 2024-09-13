@@ -2,6 +2,7 @@
 
 
 #include "TimeActor.h"
+#include "SocialCell.h"
 
 // Sets default values
 ATimeActor::ATimeActor()
@@ -36,6 +37,7 @@ void ATimeActor::BeginPlay()
 
 void ATimeActor::OneInGameSecond()
 {
+
 	if (TimeMinute + 1 > 1440)
 	{
 		TimeMinute = 1;
@@ -85,4 +87,92 @@ void ATimeActor::AddCharacterToArray(ATerraCharacter* TerraCharacter)
 	{
 		Characters.Add(Cast<ATerraCharacter>(LocalCharacter));
 	}
+}
+
+
+TArray<AInteractionMark*> ATimeActor::GetAllMarksForStatus(FName Status)
+{
+
+	FSStatusCreation* StatusDataFromDT;
+	StatusDataFromDT = Characters[0]->StatusComponent->DT_Statuses->FindRow<FSStatusCreation>(Status, TEXT("none"), false);
+
+	FSActivitiesCreation* ActvitiesDataFromDT;
+
+	TArray<EMarkType> MarksTypeArray;
+
+	for (auto& LocalActivity : StatusDataFromDT->ActivitiesToRestore)
+	{
+		TArray<AActor*> SCArray;
+		UGameplayStatics::GetAllActorsOfClass(GetWorld(), ASocialCell::StaticClass(), SCArray);
+
+		ASocialCell* LocalSC = Cast<ASocialCell>(SCArray[0]);
+
+		ActvitiesDataFromDT = LocalSC->DT_Acitivites->FindRow<FSActivitiesCreation>(LocalActivity, TEXT("none"), false);
+
+		MarksTypeArray.Append(ActvitiesDataFromDT->MarkForActivities);
+	}
+
+	TArray<AActor*> LocalActors;
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AInteractionMark::StaticClass(), LocalActors);
+
+	TArray<AInteractionMark*> MatchingMark;
+	for (auto& LocalActor : LocalActors)
+	{
+		if (MarksTypeArray.Contains(Cast<AInteractionMark>(LocalActor)->MarkType))
+		{
+			MatchingMark.Add(Cast<AInteractionMark>(LocalActor));
+		}
+	}
+
+	return MatchingMark;
+}
+
+TMap<FName, int> ATimeActor::GetNumberOfMarkThatRestoreStats(FName Status)
+{
+	TMap<FName, int> OutputMap;
+
+	FSStatusCreation* StatusDataFromDT;
+	StatusDataFromDT = Characters[0]->StatusComponent->DT_Statuses->FindRow<FSStatusCreation>(Status, TEXT("none"), false);
+
+	FSActivitiesCreation* ActvitiesDataFromDT;
+
+	TArray<EMarkType> MarksTypeArray;
+
+	for (auto& LocalActivity : StatusDataFromDT->ActivitiesToRestore)
+	{
+		TArray<AActor*> SCArray;
+		UGameplayStatics::GetAllActorsOfClass(GetWorld(), ASocialCell::StaticClass(), SCArray);
+
+		ASocialCell* LocalSC = Cast<ASocialCell>(SCArray[0]);
+
+		ActvitiesDataFromDT = LocalSC->DT_Acitivites->FindRow<FSActivitiesCreation>(LocalActivity, TEXT("none"), false);
+
+		MarksTypeArray.Append(ActvitiesDataFromDT->MarkForActivities);
+	}
+
+	TArray<AActor*> LocalActors;
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AInteractionMark::StaticClass(), LocalActors);
+
+	FString LocalString;
+	TArray<AInteractionMark*> MatchingMark;
+
+	for (auto& LocalActor : LocalActors)
+	{
+		if (MarksTypeArray.Contains(Cast<AInteractionMark>(LocalActor)->MarkType))
+		{
+			LocalString.Append(UEnum::GetValueAsString(Cast<AInteractionMark>(LocalActor)->MarkType));
+			LocalString.Append(Cast<AInteractionMark>(LocalActor)->ThisMarkActors[0]->InteractionComponent->AdditionalInfo.ToString());
+			
+			if (OutputMap.Contains(*LocalString))
+			{
+				OutputMap.Add(*LocalString, *OutputMap.Find(*LocalString) + 1);
+			}
+			else
+			{
+				OutputMap.Add(*LocalString, 1);
+			}
+		}
+	}
+
+	return OutputMap;
 }

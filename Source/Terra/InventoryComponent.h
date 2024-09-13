@@ -18,6 +18,7 @@ enum class EItemType
 	Weapon, 
 	Armour,
 	Food,
+	BeverageContainer,
 };
 
 UENUM(BlueprintType)
@@ -26,6 +27,17 @@ enum class EEquipmentType
 	No,
 	Helmet,
 	MeleeWeapon,
+};
+
+USTRUCT(BlueprintType)
+struct FSBeverageCreation : public FTableRowBase
+{
+	GENERATED_USTRUCT_BODY()
+
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	TMap<FName, float> ModifierBonuses;
+
 };
 
 USTRUCT(BlueprintType)
@@ -52,7 +64,7 @@ struct FSItemCreation : public FTableRowBase
 	TMap<FName, float> ModifierBonusesOnLowDurability;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere)
-	bool bStaticBonuses; // If true -> Modifier Bonus alwaus be ModifierBonus
+	TMap<FName, float> StaticModifierBonuses;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere)
 	int EffectDuration;
@@ -86,6 +98,9 @@ struct FSItem : public FTableRowBase
 	TMap<FName, float> ModifierBonuses;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	TMap<FName, float> CapacityModifier;
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
 	int32 Durability; // Також свіжість
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere)
@@ -101,13 +116,32 @@ struct FSItem : public FTableRowBase
 		
 		for (const auto& Pair : ModifierBonuses)
 		{
-			const FName& Key = Pair.Key; // cargo
-			const float& Value1 = Pair.Value; // 5
+			const FName& Key = Pair.Key; 
+			const float& Value1 = Pair.Value; 
 
 			// Check if the key exists in Map2
 			if (Other.ModifierBonuses.Contains(Key))
 			{
-				const float* Value2 = Other.ModifierBonuses.Find(Key); // 10
+				const float* Value2 = Other.ModifierBonuses.Find(Key);
+				if (Value2 == nullptr || *Value2 != Value1)
+				{
+					// Either the key doesn't exist in Map2 or the values are not equal
+				}
+			}
+			else
+			{
+			}
+		}
+
+		for (const auto& Pair : CapacityModifier)
+		{
+			const FName& Key = Pair.Key;
+			const float& Value1 = Pair.Value;
+
+			// Check if the key exists in Map2
+			if (Other.CapacityModifier.Contains(Key))
+			{
+				const float* Value2 = Other.CapacityModifier.Find(Key);
 				if (Value2 == nullptr || *Value2 != Value1)
 				{
 					// Either the key doesn't exist in Map2 or the values are not equal
@@ -134,6 +168,11 @@ struct FSItem : public FTableRowBase
 			Hash = HashCombine(Hash, GetTypeHash(Pair.Key));
 			Hash = HashCombine(Hash, GetTypeHash(Pair.Value));
 		}
+		for (const auto& Pair : MyStruct.CapacityModifier)
+		{
+			Hash = HashCombine(Hash, GetTypeHash(Pair.Key));
+			Hash = HashCombine(Hash, GetTypeHash(Pair.Value));
+		}
 
 		return Hash;
 	}
@@ -143,6 +182,7 @@ struct FSItem : public FTableRowBase
 			// Copy data members from other
 			ID = other.ID;
 			ModifierBonuses = other.ModifierBonuses; // Consider deep copy for TMap
+			CapacityModifier = other.CapacityModifier;
 			Durability = other.Durability;
 			Active = other.Active;
 		}
@@ -174,10 +214,16 @@ public:
 	void RecalculateInventoryModifierBonuses();
 	FSItem CalculateModifierBonuses(FSItem Item);
 	float CalculateModifiersBasedOnLevelRequirement(FSItem Item);
-	FSItem CalculateModifiersBasedOnDurability(FSItem Item);
-	void CalculateModifiers(TMap<FName, float> Modifiers, bool bSubtractInsteadOfAdd = false);
+	TMap<FName, float> CalculateModifiersBasedOnDurability(FSItem Item);
+	void CalculateCharactersModifiers(TMap<FName, float> Modifiers, bool bSubtractInsteadOfAdd = false);
 
 	TMap<FName, float> CalculateItemModifiersDurabilityBasedOnSeconds(FName ItemID, float Seconds); // Return Modifiers which based on durability minus Seconds
+
+	TMap<FName, float> GetUnitedModifierBonusesByItemID(FName ItemID);
+
+	FSItem AddBeverage(FSItem Item, FName BeverageID, float Value);
+	FSItem AddSeveralBeverage(FSItem Item, TMap<FName, float> Beverage, bool bIgnoreCargo = false);
+	TMap<FName, float> RemoveAndApplyBeverageModifier(TMap<FName, float> CapacityModifier, float BeverageValue, bool bApplyModifiers = false);
 
 	////////////////////////////
 
@@ -186,6 +232,9 @@ public:
 	FSItem FindItemByID(FName LocalID, TArray<FSItem> ItemArray);
 	FSItem FindItemWithHighsetDelicious(TArray<FSItem> ItemArray);
 	TArray<FSItem> FindItemArrayWithModifier(TArray<FSItem> ItemArray, FName Modifier);
+	float GetBeverageCapacityUseBasedOnStatusNeed(TMap<FName, float> Capacity, TMap<FName, float> StatusNeed);
+	float GetBeverageCapacityFree(FSItem LocalItem);
+	float GetBeverageCapacityFill(FSItem LocalItem);
 
 	////////////
 
@@ -195,6 +244,7 @@ public:
 	void Init();
 
 	UDataTable* DT_Items;
+	UDataTable* DT_Beverage;
 
 	ATerraCharacter* Character;
 

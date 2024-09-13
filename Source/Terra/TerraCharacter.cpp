@@ -114,11 +114,14 @@ void ATerraCharacter::Tick(float DeltaSeconds)
 		GEngine->AddOnScreenDebugMessage(91, 1.0f, FColor::Purple, FString::FromInt(bIsInteracted));
 	}
 
-	/*
+	
 	if (GetController()->IsPlayerController())
 	{
-		
-	}*/
+		TArray<FSItem> LocalItem;
+		InventoryComponent->Inventory.GenerateKeyArray(LocalItem);
+		UE_LOG(LogTemp, Warning, TEXT("Tick: Modifier Bonuses Num %d"), LocalItem[0].ModifierBonuses.Num());
+		UE_LOG(LogTemp, Warning, TEXT("Tick: CapacityModifier Num %d"), LocalItem[0].CapacityModifier.Num());
+	}
 } 
 
 void ATerraCharacter::BeginPlay()
@@ -127,15 +130,14 @@ void ATerraCharacter::BeginPlay()
 	
 	Init();
 
-	InventoryComponent->CreateItem(FName("meat"), 1);
-	InventoryComponent->CreateItem(FName("grain"), 4);
-	InventoryComponent->CreateItem(FName("grain"), 15);
-	InventoryComponent->CreateItem(FName("hammerofstrength"), 1);
-	InventoryComponent->CreateItem(FName("hammerofagility"), 1);
-	InventoryComponent->CreateItem(FName("helmet"), 1);
-	InventoryComponent->CreateItem(FName("helmet"), 1);
+	FSItem Local = InventoryComponent->CreateItem(FName("barrel"), 0);
+	
+	Local.Durability--;
+	InventoryComponent->AddItemToInventory(Local, 1);
+	InventoryComponent->AddBeverage(InventoryComponent->AddBeverage(Local, "water", 25.0f), "wine", 5.0f);
 
-	ProgressionComponent->AddXPToAttribute("gathering", 200);
+	InventoryComponent->CreateItem(FName("grain"), 15);
+	InventoryComponent->CreateItem(FName("meat"), 15);
 
 	InventoryComponent->RecalculateInventoryModifierBonuses();
 }
@@ -150,6 +152,7 @@ void ATerraCharacter::InitProgressionComponent()
 void ATerraCharacter::InitInventoryComponent()
 {
 	InventoryComponent->DT_Items = DT_Items;
+	InventoryComponent->DT_Beverage = DT_Beverage;
 	InventoryComponent->Character = this;
 	InventoryComponent->Init();
 	Modifiers.Add("Weight", 0.0f);
@@ -198,18 +201,18 @@ void ATerraCharacter::Init()
 	}
 }
 
-AActor* ATerraCharacter::FindClosetstActorFromArray(TArray<AActor*> ActorArray)
+AActor* ATerraCharacter::FindClosetstActorFromArray(TArray<AActor*> ActorArray, AActor* TargetActor)
 {
 	AActor* OutputActor;
-	OutputActor = this;
+	OutputActor = nullptr;
 
 	float DistanceFromActors = -1.0f;
 
 	for (auto& LocalActor : ActorArray)
 	{
-		if (DistanceFromActors < UKismetMathLibrary::Vector_Distance(LocalActor->GetActorLocation(), this->GetActorLocation()))
+		if (DistanceFromActors < UKismetMathLibrary::Vector_Distance(LocalActor->GetActorLocation(), TargetActor->GetActorLocation()))
 		{
-			DistanceFromActors = UKismetMathLibrary::Vector_Distance(LocalActor->GetActorLocation(), this->GetActorLocation());
+			DistanceFromActors = UKismetMathLibrary::Vector_Distance(LocalActor->GetActorLocation(), TargetActor->GetActorLocation());
 			OutputActor = LocalActor;
 		}
 	}
@@ -258,25 +261,93 @@ void ATerraCharacter::TargetActorsPerceptionUpdated(AActor* Actor, FAIStimulus S
 			}
 		}
 
-		UE_LOG(LogTemp , Error, TEXT("Activity: %s"), *Activity.ToString());
+		UE_LOG(LogTemp , Error, TEXT("Perception Updated: Activity: %s"), *Activity.ToString());
 
 		if (Activity != "None")
 		{
 			FSActivitiesCreation* ActivitiesDataFromDT;
 			ActivitiesDataFromDT = SocialCell->DT_Acitivites->FindRow<FSActivitiesCreation>(Activity, TEXT("none"), false);
 
-			// If this IA is part of Activity going to Mark. Character will change ActivityStatus and LocalObject of BT become a LocalIA
-			if (!ActivitiesDataFromDT->MarkForActivities.IsEmpty())
+			bool CanIARestoreStatus = false;
+
+			// ONLY FOR THE HERBS
+			// Dont make this shit when we now that we need / not need it
+			if (Activity != "Gathering")
+			{
+				UE_LOG(LogTemp, Warning, TEXT("Perception Updated: Activity Not Gathering"));
+
+				// Only for the Statuses
+				for (auto& RequestPair : RequestMap)
+				{
+
+					TArray<FName> Statuses = StatusComponent->DT_Statuses->GetRowNames();
+
+					UE_LOG(LogTemp, Warning, TEXT("Perception Updated: Request - %s"), *RequestPair.Key.ToString());
+
+					if (Statuses.Contains(RequestPair.Key))
+					{
+						UE_LOG(LogTemp, Warning, TEXT("Perception Updated: Status - %s"), *RequestPair.Key.ToString());
+
+						AInteractionMark* LocalIM;
+						LocalIM = Cast<AInteractionMark>(LocalIA->InteractionComponent->ReferencedActor);
+
+						CanIARestoreStatus = StatusComponent->CanMarkRestoreStatus(LocalIM, RequestPair.Key);
+						
+						int NumofApproaches = 0;
+						if (SocialCell->GetEfficencyMarkValue(LocalIM, 1, RequestPair.Key) > 0.0f)
+						{
+							NumofApproaches = FMath::CeilToInt(RequestPair.Value / SocialCell->GetEfficencyMarkValue(LocalIM, 1, RequestPair.Key));
+
+							UAIBlueprintHelperLibrary::GetBlackboard(this)->SetValueAsInt("IntStorage_1", UAIBlueprintHelperLibrary::GetBlackboard(this)->GetValueAsInt("ActivityInt"));
+							UAIBlueprintHelperLibrary::GetBlackboard(this)->SetValueAsInt("IntStorage_2", UAIBlueprintHelperLibrary::GetBlackboard(this)->GetValueAsInt("ActivityIntAdditional"));
+
+							UAIBlueprintHelperLibrary::GetBlackboard(this)->SetValueAsName("LocalName", RequestPair.Key);
+							SocialCell->ChangeCharacterWorkStatus(0, 1, this, LocalIM, SocialCell->FindActivityByMark(LocalIM->MarkType), Activity);
+							UAIBlueprintHelperLibrary::GetBlackboard(this)->SetValueAsInt("ActivityInt", 0);
+							UAIBlueprintHelperLibrary::GetBlackboard(this)->SetValueAsInt("ActivityIntAdditional", NumofApproaches);
+
+							UE_LOG(LogTemp, Warning, TEXT("Perception Updated: For all SC, Activity - %s"), *SocialCell->FindActivityByMark(LocalIM->MarkType).ToString());
+
+							break;
+						}
+
+						if (SocialCell->GetEfficencyMarkValue(LocalIM, 0, RequestPair.Key) > 0.0f)
+						{
+							NumofApproaches = FMath::CeilToInt(RequestPair.Value / SocialCell->GetEfficencyMarkValue(LocalIM, 0, RequestPair.Key));
+
+							UAIBlueprintHelperLibrary::GetBlackboard(this)->SetValueAsInt("IntStorage_1", UAIBlueprintHelperLibrary::GetBlackboard(this)->GetValueAsInt("ActivityInt"));
+							UAIBlueprintHelperLibrary::GetBlackboard(this)->SetValueAsInt("IntStorage_2", UAIBlueprintHelperLibrary::GetBlackboard(this)->GetValueAsInt("ActivityIntAdditional"));
+
+							UAIBlueprintHelperLibrary::GetBlackboard(this)->SetValueAsName("LocalName", RequestPair.Key);
+							SocialCell->ChangeCharacterWorkStatus(0, 1, this, LocalIM, SocialCell->FindActivityByMark(LocalIM->MarkType), Activity);
+							UAIBlueprintHelperLibrary::GetBlackboard(this)->SetValueAsInt("ActivityInt", 0);
+							UAIBlueprintHelperLibrary::GetBlackboard(this)->SetValueAsInt("ActivityIntAdditional", NumofApproaches);
+
+							UE_LOG(LogTemp, Warning, TEXT("Perception Updated: For only Character, Activity - %s"), *SocialCell->FindActivityByMark(LocalIM->MarkType).ToString());
+
+							break;
+						}
+
+
+						break;
+					}
+				}
+			}
+			
+			
+
+			// If this IA is part of Activity going to Mark. Character will change ActivityStatus and ActivityObject of BT become a LocalIA
+			if (!ActivitiesDataFromDT->MarkForActivities.IsEmpty() || CanIARestoreStatus)
 			{
 
-				if (UAIBlueprintHelperLibrary::GetBlackboard(this)->GetValueAsObject("LocalObject")->IsA<AInteractionMark>())
+				if (UAIBlueprintHelperLibrary::GetBlackboard(this)->GetValueAsObject("ActivityObject")->IsA<AInteractionMark>())
 				{
 					AInteractionMark* LocalIM;
-					LocalIM = Cast<AInteractionMark>(UAIBlueprintHelperLibrary::GetBlackboard(this)->GetValueAsObject("LocalObject"));
+					LocalIM = Cast<AInteractionMark>(UAIBlueprintHelperLibrary::GetBlackboard(this)->GetValueAsObject("ActivityObject"));
 
 					if (LocalIM->ThisMarkActors.Contains(LocalIA))
 					{
-						UAIBlueprintHelperLibrary::GetBlackboard(this)->SetValueAsObject("LocalObject", LocalIA);
+						UAIBlueprintHelperLibrary::GetBlackboard(this)->SetValueAsObject("ActivityObject", LocalIA);
 						UAIBlueprintHelperLibrary::GetBlackboard(this)->SetValueAsInt("ActivityInt", 1);
 					}
 				}

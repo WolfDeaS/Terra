@@ -63,7 +63,6 @@ FSItem UInventoryComponent::CreateItem(FName ID, int Quantity, bool bIgnoreCargo
 
 	FSItem LocalItem;
 	LocalItem.ID = ID;
-	LocalItem.ModifierBonuses = ItemDataFromDT->ModifierBonuses;
 	LocalItem.Durability = ItemDataFromDT->MaxDurability;
 	LocalItem.Active = 0;
 	
@@ -78,12 +77,10 @@ FSItem UInventoryComponent::CreateItem(FName ID, int Quantity, bool bIgnoreCargo
 void UInventoryComponent::RemoveItem(FSItem Item, int Quantity, bool bIgnoreCargo)
 {
 
-	FSItem LocalItem;
-	LocalItem = Item;
-
 	int LocalInt;
-	LocalInt = *Inventory.Find(LocalItem);
+	LocalInt = *Inventory.Find(Item);
 
+	int LocalVafla = 1 + 2;
 	if (LocalInt - Quantity <= 0)
 	{
 		Inventory.Remove(Item);
@@ -94,7 +91,7 @@ void UInventoryComponent::RemoveItem(FSItem Item, int Quantity, bool bIgnoreCarg
 	}
 	else
 	{
-		LocalInt = *Inventory.Find(Item) - Quantity;
+		LocalInt -= Quantity;
 		if (!bIgnoreCargo)
 		{
 			RecalculateCargoBasedOnItem(Item.ID, *Inventory.Find(Item), LocalInt);
@@ -132,7 +129,7 @@ void UInventoryComponent::UseItem(FSItem Item)
 	FSItemCreation* ItemDataFromDT;
 	ItemDataFromDT = DT_Items->FindRow<FSItemCreation>(Item.ID, TEXT("none"), false);
 
-	TArray<FName> LocalKeys;
+	//TArray<FName> LocalKeys;
 
 	TArray<FSItem> LocalItems;
 	Inventory.GenerateKeyArray(LocalItems);
@@ -148,14 +145,17 @@ void UInventoryComponent::UseItem(FSItem Item)
 
 	int NewItemQuantity;
 
+	TMap<FName, float> LocalModifierBonuses = CalculateModifiersBasedOnDurability(LocalItem);
+	TMap<FName, float> LocalStatusesNeed;
+	float PointToConsume;
+
 	switch (ItemDataFromDT->Type)
 	{
 	case EItemType::Food:
 
 		RemoveItem(Item, 1);
-		Item.ModifierBonuses.GenerateKeyArray(LocalKeys);
 
-		CalculateModifiers(Item.ModifierBonuses);
+		CalculateCharactersModifiers(LocalModifierBonuses);
 		
 		if (ItemDataFromDT->EffectDuration > 0)
 		{
@@ -166,12 +166,31 @@ void UInventoryComponent::UseItem(FSItem Item)
 
 		break;
 
+	// The Item in and of itself doesn't give you anything. It's the filling of its capacity that does.
+	case EItemType::BeverageContainer:
+
+
+		LocalStatusesNeed = Character->StatusComponent->GetStatusesNeed();
+
+		PointToConsume = GetBeverageCapacityUseBasedOnStatusNeed(LocalItem.CapacityModifier, LocalStatusesNeed);
+
+		if (!PointToConsume == 0.0f)
+		{
+			RemoveItem(LocalItem, 1);
+
+			LocalItem.CapacityModifier = RemoveAndApplyBeverageModifier(LocalItem.CapacityModifier, PointToConsume, true);
+
+			AddItemToInventory(LocalItem, 1);
+		}
+
+		break;
+
 	case EItemType::Weapon:
 
 		if (LocalItem.Active == 1)
 		{
 
-			CalculateModifiers(Item.ModifierBonuses, 1);
+			CalculateCharactersModifiers(LocalModifierBonuses, 1);
 
 			RemoveItem(LocalItem, 1);
 
@@ -189,19 +208,19 @@ void UInventoryComponent::UseItem(FSItem Item)
 		else
 		{
 
-			LocalItem.Active = 1;
-
-			CalculateModifiers(Item.ModifierBonuses);
+			CalculateCharactersModifiers(LocalModifierBonuses);
 
 			if (LocalValue[LocalIndex] > 1)
 			{
 				NewItemQuantity = LocalValue[LocalIndex] - 1;
 				Inventory.Add(LocalItems[LocalIndex], NewItemQuantity);
+				LocalItem.Active = 1;
 				Inventory.Add(LocalItem, 1);
 			}
 			else
 			{
 				RemoveItem(LocalItem, 1);
+				LocalItem.Active = 1;
 				AddItemToInventory(LocalItem, 1);
 			}
 			
@@ -230,7 +249,7 @@ void UInventoryComponent::UseItem(FSItem Item)
 		if (LocalItem.Active == 1)
 		{
 
-			CalculateModifiers(Item.ModifierBonuses, 1);
+			CalculateCharactersModifiers(LocalModifierBonuses, 1);
 
 			RemoveItem(LocalItem, 1);
 
@@ -247,20 +266,19 @@ void UInventoryComponent::UseItem(FSItem Item)
 		}
 		else
 		{
-
-			LocalItem.Active = 1;
-
-			CalculateModifiers(Item.ModifierBonuses);
+			CalculateCharactersModifiers(LocalModifierBonuses);
 
 			if (LocalValue[LocalIndex] > 1)
 			{
 				NewItemQuantity = LocalValue[LocalIndex] - 1;
 				Inventory.Add(LocalItems[LocalIndex], NewItemQuantity);
+				LocalItem.Active = 1;
 				Inventory.Add(LocalItem, 1);
 			}
 			else
 			{
 				RemoveItem(LocalItem, 1);
+				LocalItem.Active = 1;
 				AddItemToInventory(LocalItem, 1);
 			}
 
@@ -270,7 +288,6 @@ void UInventoryComponent::UseItem(FSItem Item)
 			if (EquipmentItem->ID != "None")
 			{
 				UseItem(*EquipmentItem);
-
 			}
 
 			TArray<FSItem> LocalItemsForOutput;
@@ -315,7 +332,8 @@ void UInventoryComponent::UseHighPriorityItemByTag(FName LocalName, FName Additi
 
 void UInventoryComponent::RemoveItemEffect(FSItem LocalItem)
 {
-	CalculateModifiers(LocalItem.ModifierBonuses, 1);
+	TMap<FName, float> LocalModifierBonuses = CalculateModifiersBasedOnDurability(LocalItem);
+	CalculateCharactersModifiers(LocalModifierBonuses, 1);
 }
 
 ////////////// RECALCULATE MODIFERS //////////////
@@ -366,6 +384,7 @@ void UInventoryComponent::RecalculateInventoryModifierBonuses()
 	}
 }
 
+
 FSItem UInventoryComponent::CalculateModifierBonuses(FSItem Item)
 {
 	FSItem NewItem;
@@ -387,7 +406,7 @@ FSItem UInventoryComponent::CalculateModifierBonuses(FSItem Item)
 		}
 	}
 
-	NewItem = CalculateModifiersBasedOnDurability(NewItem);
+	NewItem.ModifierBonuses = CalculateModifiersBasedOnDurability(NewItem);
 
 	float BonusesModifier;
 	BonusesModifier = 1.0f;
@@ -437,7 +456,8 @@ float UInventoryComponent::CalculateModifiersBasedOnLevelRequirement(FSItem Item
 	return OutModifier;
 }
 
-FSItem UInventoryComponent::CalculateModifiersBasedOnDurability(FSItem Item)
+// Return ModifierBonuses based on durability and static also
+TMap<FName,float> UInventoryComponent::CalculateModifiersBasedOnDurability(FSItem Item)
 {
 	FSItemCreation* ItemDataFromDT;
 	ItemDataFromDT = DT_Items->FindRow<FSItemCreation>(Item.ID, TEXT("none"), false);
@@ -455,68 +475,65 @@ FSItem UInventoryComponent::CalculateModifiersBasedOnDurability(FSItem Item)
 
 
 	LocalItem.ModifierBonuses.Empty();
-	if (ItemDataFromDT->bStaticBonuses)
-	{
-		LocalItem.ModifierBonuses = ItemDataFromDT->ModifierBonuses;
-	}
-	else if	(ItemDataFromDT->ModifierBonusesOnLowDurability.IsEmpty())
-	{
-		for (auto& Pair : ItemDataFromDT->ModifierBonuses)
-		{
-			float Value;
-			Value = Pair.Value * Percent;
 
-			LocalItem.ModifierBonuses.Add(Pair.Key, Value);
-		}
-	}
-	else
+	
+	if (!ItemDataFromDT->ModifierBonuses.IsEmpty())
 	{
-		/*
-		if (Percent > 0.5)
+		if (ItemDataFromDT->ModifierBonusesOnLowDurability.IsEmpty())
 		{
 			for (auto& Pair : ItemDataFromDT->ModifierBonuses)
 			{
 				float Value;
-				Value = Pair.Value * ((Percent - 0.5) / 0.5);
+				Value = Pair.Value * Percent;
 
 				LocalItem.ModifierBonuses.Add(Pair.Key, Value);
 			}
 		}
 		else
 		{
-			for (auto& Pair : ItemDataFromDT->ModifierBonusesOnLowDurability)
-			{
-				float Value;
-				Value = Pair.Value * ((0.5 - Percent) / 0.5);
+			TMap<FName, float> LocalModifierBonuses;
 
-				LocalItem.ModifierBonuses.Add(Pair.Key, Value);
+			for (auto& Pair : ItemDataFromDT->ModifierBonuses)
+			{
+				if (ItemDataFromDT->ModifierBonusesOnLowDurability.Contains(Pair.Key))
+				{
+					LocalModifierBonuses.Add(Pair.Key, Pair.Value - *ItemDataFromDT->ModifierBonusesOnLowDurability.Find(Pair.Key));
+				}
+				else
+				{
+					LocalModifierBonuses.Add(Pair.Key, Pair.Value);
+				}
+			}
+			for (auto& Pair : LocalModifierBonuses)
+			{
+				LocalItem.ModifierBonuses.Add(Pair.Key, Pair.Value * Percent + *ItemDataFromDT->ModifierBonusesOnLowDurability.Find(Pair.Key));
 			}
 		}
-		*/
-
-		TMap<FName, float> LocalModifierBonuses;
-
-		for (auto& Pair : ItemDataFromDT->ModifierBonuses)
+	}
+	
+	if (!ItemDataFromDT->StaticModifierBonuses.IsEmpty())
+	{
+		for (auto& Pair : ItemDataFromDT->StaticModifierBonuses)
 		{
-			if (ItemDataFromDT->ModifierBonusesOnLowDurability.Contains(Pair.Key))
+			float Value;
+			if (LocalItem.ModifierBonuses.Contains(Pair.Key))
 			{
-				LocalModifierBonuses.Add(Pair.Key, Pair.Value - *ItemDataFromDT->ModifierBonusesOnLowDurability.Find(Pair.Key));
+				Value = *LocalItem.ModifierBonuses.Find(Pair.Key) + Pair.Value;
 			}
 			else
 			{
-				LocalModifierBonuses.Add(Pair.Key, Pair.Value);
+				Value = Pair.Value;
 			}
-		}
-		for (auto& Pair : LocalModifierBonuses)
-		{
-			LocalItem.ModifierBonuses.Add(Pair.Key, Pair.Value * Percent + *ItemDataFromDT->ModifierBonusesOnLowDurability.Find(Pair.Key));
+
+			LocalItem.ModifierBonuses.Add(Pair.Key, Value);
 		}
 	}
 
-	return LocalItem;
+	return LocalItem.ModifierBonuses;
 }
 
-void UInventoryComponent::CalculateModifiers(TMap<FName, float> ModifierBonuses, bool bSubtractInsteadOfAdd)
+// Upgrade Characters Modifiers based on items
+void UInventoryComponent::CalculateCharactersModifiers(TMap<FName, float> ModifierBonuses, bool bSubtractInsteadOfAdd)
 {
 	for (auto& LocalModifierPair : ModifierBonuses)
 	{
@@ -590,6 +607,7 @@ void UInventoryComponent::CalculateModifiers(TMap<FName, float> ModifierBonuses,
 	}
 }
 
+// Return only TMap of ModifierBonuses, based in seconds. Same function that "CalculateModifiersBasedOnDurability", but with time
 TMap<FName, float> UInventoryComponent::CalculateItemModifiersDurabilityBasedOnSeconds(FName ItemID, float Seconds)
 {
 	FSItem LocalItem;
@@ -601,7 +619,148 @@ TMap<FName, float> UInventoryComponent::CalculateItemModifiersDurabilityBasedOnS
 		LocalItem.Durability = 0;
 	}
 
-	return CalculateModifiersBasedOnDurability(LocalItem).ModifierBonuses;
+	return CalculateModifiersBasedOnDurability(LocalItem);
+}
+
+TMap<FName, float> UInventoryComponent::GetUnitedModifierBonusesByItemID(FName ItemID)
+{
+	FSItemCreation* ItemDataFromDT;
+	ItemDataFromDT = DT_Items->FindRow<FSItemCreation>(ItemID, TEXT("none"), false);
+
+	TMap<FName, float> Local;
+
+	Local = ItemDataFromDT->ModifierBonuses;
+
+	if (!ItemDataFromDT->StaticModifierBonuses.IsEmpty())
+	{
+		for (auto& LocalPair : ItemDataFromDT->StaticModifierBonuses)
+		{
+			if (Local.Contains(LocalPair.Key))
+			{
+				Local.Add(LocalPair.Key, LocalPair.Value + *Local.Find(LocalPair.Key));
+			}
+			else
+			{
+				Local.Add(LocalPair.Key, LocalPair.Value);
+			}
+		}
+	}
+
+	return Local;
+}
+
+// Replace Item
+FSItem UInventoryComponent::AddBeverage(FSItem Item, FName BeverageID, float Value)
+{
+	FSItem LocalItem;
+	LocalItem = Item;
+
+	RemoveItem(Item, 1);
+
+	UE_LOG(LogTemp, Error, TEXT("AddBeverage: Start"));
+
+
+	
+	if (LocalItem.CapacityModifier.Contains(BeverageID))
+	{
+		LocalItem.CapacityModifier.Add(BeverageID, Value + *LocalItem.CapacityModifier.Find(BeverageID));
+
+		UE_LOG(LogTemp, Error, TEXT("AddBeverage: Contains"));
+	}
+	else
+	{
+		LocalItem.CapacityModifier.Add(BeverageID, Value);
+
+		UE_LOG(LogTemp, Error, TEXT("AddBeverage: Dont Contains"));
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("AddBeverage: CapacityModifier Num %d"), LocalItem.CapacityModifier.Num());
+
+	AddItemToInventory(LocalItem, 1);
+
+	return LocalItem;
+}
+
+// Replace Item
+FSItem UInventoryComponent::AddSeveralBeverage(FSItem Item, TMap<FName, float> Beverage, bool bIgnoreCargo)
+{
+	FSItem LocalItem;
+	LocalItem = Item;
+
+	RemoveItem(Item, 1, bIgnoreCargo);
+
+	for (auto& Pair : Beverage)
+	{
+		if (LocalItem.CapacityModifier.Contains(Pair.Key))
+		{
+			LocalItem.CapacityModifier.Add(Pair.Key, Pair.Value + *LocalItem.CapacityModifier.Find(Pair.Key));
+
+			UE_LOG(LogTemp, Error, TEXT("AddSeveralBeverage: Contains"));
+		}
+		else
+		{
+			LocalItem.CapacityModifier.Add(Pair.Key, Pair.Value);
+
+			UE_LOG(LogTemp, Error, TEXT("AddSeveralBeverage: Dont Contains"));
+		}
+
+		UE_LOG(LogTemp, Warning, TEXT("AddSeveralBeverage: CapacityModifier Num %d"), LocalItem.CapacityModifier.Num());
+	}
+	UE_LOG(LogTemp, Warning, TEXT("AddSeveralBeverage: CapacityModifier Num %d"), LocalItem.CapacityModifier.Num());
+
+	AddItemToInventory(LocalItem, 1, bIgnoreCargo);
+
+	return LocalItem;
+}
+
+
+TMap<FName, float> UInventoryComponent::RemoveAndApplyBeverageModifier(TMap<FName,float> CapacityModifier, float BeverageValue, bool bApplyModifiers)
+{
+	float OverallCapacity = 0.0f;
+	TMap<FName, float> CapacityPercentage;
+	TMap<FName, float> LocalCapacity;
+	TMap<FName, float> OutputCapacity;
+	TMap<FName, float> LocalModifierBonuses;
+
+	for (auto& Pair : CapacityModifier)
+	{
+		OverallCapacity += Pair.Value;
+	}
+
+	
+
+	for (auto& Pair : CapacityModifier)
+	{
+		CapacityPercentage.Add(Pair.Key, Pair.Value / OverallCapacity);
+	}
+
+	for (auto& Pair : CapacityPercentage)
+	{
+		LocalCapacity.Add(Pair.Key, Pair.Value * BeverageValue);
+	}
+
+	for (auto& Pair : LocalCapacity)
+	{
+		OutputCapacity.Add(Pair.Key, *CapacityModifier.Find(Pair.Key) - Pair.Value);
+
+		FSBeverageCreation* BeverageDataFromDT;
+		BeverageDataFromDT = DT_Beverage->FindRow<FSBeverageCreation>(Pair.Key, TEXT("none"), false);
+
+		if (bApplyModifiers)
+		{
+			for (auto& LocalPair : BeverageDataFromDT->ModifierBonuses)
+			{
+				LocalModifierBonuses.Add(LocalPair.Key, LocalPair.Value * Pair.Value);
+			}
+		}
+	}
+
+	if (bApplyModifiers)
+	{
+		CalculateCharactersModifiers(LocalModifierBonuses);
+	}
+
+	return OutputCapacity;
 }
 
 ///////////////////////////////////////////////////
@@ -656,6 +815,122 @@ TArray<FSItem> UInventoryComponent::FindItemArrayWithModifier(TArray<FSItem> Ite
 	return LocalItemArray;
 }
 
+float UInventoryComponent::GetBeverageCapacityUseBasedOnStatusNeed(TMap<FName,float> Capacity, TMap<FName, float> StatusNeed)
+{
+	TArray<FName> LocalStatusesNeed;
+	UE_LOG(LogTemp, Warning, TEXT("Get Beverage Capacity Use: StatusNeed Num = %d"), StatusNeed.Num());
+	TMap<FName, float> ModifierBonusesForOnePoint;
+	TMap<FName, float> OverallModifierBonuses;
+	TMap<FName, float> LocalStatusNeedValues;
+
+	float OverallCapacty = 0.0f;
+
+	for (auto& Pair : Capacity)
+	{
+		FSBeverageCreation* BeverageDataFromDT;
+		BeverageDataFromDT = DT_Beverage->FindRow<FSBeverageCreation>(Pair.Key, TEXT("none"), false);
+
+		OverallCapacty += Pair.Value;
+		
+		for (auto& LocalPair : BeverageDataFromDT->ModifierBonuses)
+		{
+			if (StatusNeed.Contains(LocalPair.Key))
+			{
+				LocalStatusesNeed.Add(LocalPair.Key);
+			}
+
+			OverallModifierBonuses.Add(LocalPair.Key, LocalPair.Value * Pair.Value);
+			UE_LOG(LogTemp, Warning, TEXT("Get Beverage Capacity Use: OverallModifierBonuses Water 1 = %f"), LocalPair.Value * Pair.Value);
+		}
+	}
+	UE_LOG(LogTemp, Warning, TEXT("Get Beverage Capacity Use: OverallCapacty = %f"), OverallCapacty);
+
+	if (OverallCapacty == 0.0f)
+	{
+		return 0.0f;
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Get Beverage Capacity Use: OverallModifierBonuses Num = %d"), OverallModifierBonuses.Num());
+
+		UE_LOG(LogTemp, Warning, TEXT("Get Beverage Capacity Use: OverallModifierBonuses Water 2 = %f"), OverallModifierBonuses.Find("Thirst"));
+
+		for (auto& Pair : OverallModifierBonuses)
+		{
+			ModifierBonusesForOnePoint.Add(Pair.Key, Pair.Value / OverallCapacty);
+		}
+
+		UE_LOG(LogTemp, Warning, TEXT("Get Beverage Capacity Use: ModifierBonusesForOnePoint Num = %d"), ModifierBonusesForOnePoint.Num());
+
+		for (auto& Status : LocalStatusesNeed)
+		{
+			LocalStatusNeedValues.Add(Status, *StatusNeed.Find(Status));
+
+			UE_LOG(LogTemp, Warning, TEXT("Get Beverage Capacity Use: LocalStatusesNeed Num = %d"), LocalStatusesNeed.Num());
+		}
+
+		float PointOutput = -1.0f;
+
+		UE_LOG(LogTemp, Warning, TEXT("Get Beverage Capacity Use: LocalStatusNeedValues Num = %d"), LocalStatusNeedValues.Num());
+
+		for (auto& Pair : LocalStatusNeedValues)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Get Beverage Capacity Use: Last Check = %f"), Pair.Value / *ModifierBonusesForOnePoint.Find(Pair.Key));
+
+			if (Pair.Value / *ModifierBonusesForOnePoint.Find(Pair.Key) < PointOutput || PointOutput == -1.0f)
+			{
+				PointOutput = Pair.Value / *ModifierBonusesForOnePoint.Find(Pair.Key);
+			}
+		}
+
+		UE_LOG(LogTemp, Warning, TEXT("Get Beverage Capacity Use: PointOutput Max = %f"), FMath::Max(PointOutput, 0.0f));
+
+		return FMath::Max(PointOutput, 0.0f);
+	}
+}
+
+float UInventoryComponent::GetBeverageCapacityFree(FSItem LocalItem)
+{
+	if (LocalItem.ModifierBonuses.Contains("Capacity"))
+	{
+		float LocalCapacity;
+		LocalCapacity = *LocalItem.ModifierBonuses.Find("Capacity");
+
+		float OverallValue = 0.0f;
+
+		for (auto& LocalPair : LocalItem.CapacityModifier)
+		{
+			OverallValue += LocalPair.Value;
+		}
+
+		return LocalCapacity - OverallValue;
+	}
+	else
+	{
+		return -1.0f;
+	}
+}
+
+float UInventoryComponent::GetBeverageCapacityFill(FSItem LocalItem)
+{
+	if (LocalItem.ModifierBonuses.Contains("Capacity"))
+	{
+		float OverallValue = 0.0f;
+
+		for (auto& LocalPair : LocalItem.CapacityModifier)
+		{
+			OverallValue += LocalPair.Value;
+		}
+
+		return OverallValue;
+	}
+	else
+	{
+		return -1.0f;
+	}
+}
+
+
 ///////////////////////////////////////////////////
 
 void UInventoryComponent::RecalculateCargoBasedOnItem(FName ID, int PrevQuantity, int NewQuantity)
@@ -703,6 +978,7 @@ void UInventoryComponent::Init()
 
 void UInventoryComponent::OnSecondCalculations()
 {
+	
 	TArray<FSItem> ItemToDelete;
 	TMap<FSItem, int> ItemToAdd;
 
@@ -715,8 +991,8 @@ void UInventoryComponent::OnSecondCalculations()
 			FSItem NewItem;
 			NewItem = ItemMap.Key;
 			NewItem.Durability--;
-			NewItem = CalculateModifierBonuses(NewItem);
 
+			UE_LOG(LogTemp, Error, TEXT("OnSecondCalculations: Rot"));
 			ItemToAdd.Add(NewItem, ItemMap.Value);
 		}
 	}

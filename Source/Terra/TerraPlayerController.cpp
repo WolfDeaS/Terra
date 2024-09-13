@@ -133,6 +133,7 @@ void ATerraPlayerController::OnSetDestinationReleased()
 	// If it was a short press
 	if (FollowTime <= ShortPressThreshold)
 	{
+		GEngine->AddOnScreenDebugMessage(208129, 1.0f, FColor::Emerald, "Go To");
 		// We move there and spawn some particles
 		if (InteractableActor)
 		{
@@ -145,12 +146,81 @@ void ATerraPlayerController::OnSetDestinationReleased()
 			MovedToInteractableActor->LocalStaticMesh->UPrimitiveComponent::SetRenderCustomDepth(1);
 			MovedToInteractableActor->LocalStaticMesh->UPrimitiveComponent::SetCustomDepthStencilValue(4);
 			InteractAfterReach = 1;
+			GEngine->AddOnScreenDebugMessage(208122, 1.0f, FColor::Emerald, "IA Go To");
+		}
+		else if (InteractableRiver)
+		{
+			FVector PawnLocation;
+			PawnLocation = this->GetPawn()->GetActorLocation();
+			FVector LocalNearestPointOfInteractableActor;
+			MovedToInteractableRiver = InteractableRiver;
+
+			FVector StartPos = Character->GetActorLocation();
+			FVector EndPos = CachedDestination;
+			float LocalAngleRadians = UKismetMathLibrary::FindLookAtRotation(StartPos, EndPos).Yaw * (PI / 180);
+			
+			int32 LocalStatusOfSteps = 0;
+
+			FVector LocalPos = StartPos;
+			FVector PREVPos;
+			float x;
+			float y;
+
+			// True: To Start Pos
+			// False: To End Pos
+			//bool StepDirection = false;
+
+			while (LocalStatusOfSteps < STEPS_FOR_RIVER_FINDING.Num())
+			{
+				PREVPos = LocalPos;
+
+				x = LocalPos.X + STEPS_FOR_RIVER_FINDING[LocalStatusOfSteps] * cos(LocalAngleRadians);
+				y = LocalPos.Y + STEPS_FOR_RIVER_FINDING[LocalStatusOfSteps] * sin(LocalAngleRadians);
+				UE_LOG(LogTemplateCharacter, Error, TEXT("Move To River: Forward"));
+				
+
+				LocalPos = FVector(x, y, 10000.0f);
+
+				FHitResult LineTraceResult;
+				const FName TraceTag("DebugTrace");
+
+				GetWorld()->DebugDrawTraceTag = TraceTag;
+
+				FCollisionQueryParams CollisionParams;
+				CollisionParams.TraceTag = TraceTag;
+
+				if (GetWorld()->LineTraceSingleByChannel(LineTraceResult, LocalPos, FVector(x, y, -10000.0f), ECollisionChannel::ECC_GameTraceChannel1, CollisionParams, FCollisionResponseParams()))
+				{
+
+					FString LocalName;
+					LocalName = LineTraceResult.GetActor()->GetName();
+					GEngine->AddOnScreenDebugMessage(2091, 1.0f, FColor::Cyan, LocalName);
+
+					if (Cast<AInteractableRiver>(LineTraceResult.GetActor()) == MovedToInteractableRiver)
+					{
+						LocalPos = PREVPos;
+
+						LocalStatusOfSteps++;
+
+						if (LocalStatusOfSteps == STEPS_FOR_RIVER_FINDING.Num())
+						{
+							LocalPos = FVector(LocalPos.X, LocalPos.Y, LineTraceResult.Location.Z);
+						}
+
+						UE_LOG(LogTemplateCharacter, Error, TEXT("Move To River: LocalStatusOfSteps NextLevel Forward"));
+					}
+				}
+			}
+			
+			UAIBlueprintHelperLibrary::SimpleMoveToLocation(this, LocalPos);
+			InteractAfterReach = 1;
 		}
 		else
 		{
-			if (MovedToInteractableActor)
+			if (MovedToInteractableActor || MovedToInteractableRiver)
 			{
 				RemoveMovedToInteractableActor();
+				GEngine->AddOnScreenDebugMessage(2084, 1.0f, FColor::Emerald, "OnSetDestinationReleased: RemoveMovedToInteractableActor");
 			}
 			UAIBlueprintHelperLibrary::SimpleMoveToLocation(this, CachedDestination);
 			UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, FXCursor, CachedDestination, FRotator::ZeroRotator, FVector(1.f, 1.f, 1.f), true, true, ENCPoolMethod::None, true);
@@ -195,69 +265,113 @@ void ATerraPlayerController::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-
+	GEngine->AddOnScreenDebugMessage(2081232, 1.0f, FColor::Emerald, Character->GetActorLocation().ToString());
 	FVector MousePositionLocation;
 	FVector MousePositionDirection;
 	UGameplayStatics::GetPlayerController(GetWorld(), 0)->DeprojectMousePositionToWorld(MousePositionLocation, MousePositionDirection);
 
 
-	MousePositionDirection = MousePositionDirection * 100000.0f;
-	MousePositionDirection = MousePositionDirection + MousePositionLocation;
+	MousePositionDirection *= 100000.0f;
+	MousePositionDirection += MousePositionLocation;
 
 	FHitResult LineTraceResult;
 	FCollisionQueryParams CollisionParams;
 
 	if (GetWorld()->LineTraceSingleByChannel(LineTraceResult, MousePositionLocation, MousePositionDirection, ECollisionChannel::ECC_GameTraceChannel1, CollisionParams, FCollisionResponseParams()))
 	{
-		FString LocalName;
-		LocalName = LineTraceResult.GetActor()->GetName();
 		if (InteractableActor)
 		{
 			InteractableActor->LocalStaticMesh->UPrimitiveComponent::SetRenderCustomDepth(0);
 		}
-		InteractableActor = Cast<AInteractableActor>(LineTraceResult.GetActor());
 
-		
-		
-		
-		InteractableActor->LocalStaticMesh->UPrimitiveComponent::SetRenderCustomDepth(1);
+		if (LineTraceResult.GetActor()->IsA<AInteractableActor>())
+		{
+			InteractableActor = Cast<AInteractableActor>(LineTraceResult.GetActor());
+			InteractableActor->LocalStaticMesh->UPrimitiveComponent::SetRenderCustomDepth(1);
+			GEngine->AddOnScreenDebugMessage(2081290, 1.0f, FColor::Emerald, "IA Detected");
+		}
+		else if(LineTraceResult.GetActor()->IsA<AInteractableRiver>())
+		{
+			InteractableRiver = Cast<AInteractableRiver>(LineTraceResult.GetActor());
+			GEngine->AddOnScreenDebugMessage(2081291, 1.0f, FColor::Emerald, "River Detected");
+		}
 	}
 	else
 	{
 		if (InteractableActor && !MovedToInteractableActor)
 		{
-			InteractableActor->LocalStaticMesh->UPrimitiveComponent::SetRenderCustomDepth(0);
-			InteractableActor->LocalStaticMesh->UPrimitiveComponent::SetCustomDepthStencilValue(1);
-		}
-		InteractableActor = NULL;
-	}
-
-	if (MovedToInteractableActor && InteractAfterReach)
-	{
-		if (MovedToInteractableActor->LocalCollisionBox->IsOverlappingActor(this->GetPawn()))
-		{
-			InteractAfterReach = 0;
-			MovedToInteractableActor->InteractionComponent->OnInteractionBegan(Character);
-			RemoveMovedToInteractableActor();
-			if (InteractableActor)
+			if (InteractableActor->IsA<AInteractableActor>())
 			{
 				InteractableActor->LocalStaticMesh->UPrimitiveComponent::SetRenderCustomDepth(0);
 				InteractableActor->LocalStaticMesh->UPrimitiveComponent::SetCustomDepthStencilValue(1);
-				
-				InteractableActor = NULL;
+			}
+		}
+		InteractableActor = NULL;
+		InteractableRiver = NULL;
+		GEngine->AddOnScreenDebugMessage(2085, 1.0f, FColor::Emerald, "Tick: Remove InteractableRiver and InteractableActor");
+	}
+
+	if ((MovedToInteractableActor || MovedToInteractableRiver) && InteractAfterReach)
+	{
+		if (MovedToInteractableActor)
+		{
+			if (MovedToInteractableActor->LocalCollisionBox->IsOverlappingActor(this->GetPawn()))
+			{
+				InteractAfterReach = 0;
+				MovedToInteractableActor->InteractionComponent->OnInteractionBegan(Character);
+				RemoveMovedToInteractableActor();
+				if (InteractableActor)
+				{
+					InteractableActor->LocalStaticMesh->UPrimitiveComponent::SetRenderCustomDepth(0);
+					InteractableActor->LocalStaticMesh->UPrimitiveComponent::SetCustomDepthStencilValue(1);
+
+					InteractableActor = NULL;
+				}
+			}
+		}
+		else if (MovedToInteractableRiver)
+		{
+			if (MovedToInteractableRiver->GetWaterBodyComponent()->IsOverlappingActor(this->GetPawn()))
+			{
+				InteractAfterReach = 0;
+				MovedToInteractableRiver->InteractionComponent->OnInteractionBegan(Character);
+				RemoveMovedToInteractableActor();
+				if (InteractableRiver)
+				{
+					InteractableRiver = NULL;
+
+					GEngine->AddOnScreenDebugMessage(2084, 1.0f, FColor::Emerald, "Tick: Remove InteractableRiver");
+				}
 			}
 		}
 	}
-	if (MovedToInteractableActor && !InteractAfterReach)
+	if ((MovedToInteractableActor || MovedToInteractableRiver) && !InteractAfterReach)
 	{
-		if (MovedToInteractableActor->LocalCollisionBox->IsOverlappingActor(this->GetPawn()))
+		if (MovedToInteractableActor)
 		{
-			RemoveMovedToInteractableActor();
-			if (InteractableActor)
+			if (MovedToInteractableActor->LocalCollisionBox->IsOverlappingActor(this->GetPawn()))
 			{
-				InteractableActor->LocalStaticMesh->UPrimitiveComponent::SetRenderCustomDepth(0);
-				InteractableActor->LocalStaticMesh->UPrimitiveComponent::SetCustomDepthStencilValue(1);
-				InteractableActor = NULL;
+				RemoveMovedToInteractableActor();
+				if (InteractableActor)
+				{
+					InteractableActor->LocalStaticMesh->UPrimitiveComponent::SetRenderCustomDepth(0);
+					InteractableActor->LocalStaticMesh->UPrimitiveComponent::SetCustomDepthStencilValue(1);
+					InteractableActor = NULL;
+				}
+			}
+		}
+		else if (MovedToInteractableRiver)
+		{
+			if (MovedToInteractableRiver->GetWaterBodyComponent()->IsOverlappingActor(this->GetPawn()))
+			{
+				InteractAfterReach = 0;
+				MovedToInteractableRiver->InteractionComponent->OnInteractionBegan(Character);
+				RemoveMovedToInteractableActor();
+				if (InteractableRiver)
+				{
+					InteractableRiver = NULL;
+					GEngine->AddOnScreenDebugMessage(2084, 1.0f, FColor::Emerald, "Tick: Remove MovedToInteractableActor");
+				}
 			}
 		}
 	}
@@ -265,9 +379,20 @@ void ATerraPlayerController::Tick(float DeltaTime)
 
 void ATerraPlayerController::RemoveMovedToInteractableActor()
 {
-	MovedToInteractableActor->LocalStaticMesh->UPrimitiveComponent::SetRenderCustomDepth(0);
-	MovedToInteractableActor->LocalStaticMesh->UPrimitiveComponent::SetCustomDepthStencilValue(0);
-	MovedToInteractableActor = NULL;
+	if (MovedToInteractableActor)
+	{
+		MovedToInteractableActor->LocalStaticMesh->UPrimitiveComponent::SetRenderCustomDepth(0);
+		MovedToInteractableActor->LocalStaticMesh->UPrimitiveComponent::SetCustomDepthStencilValue(0);
+		MovedToInteractableActor = NULL;
+
+		GEngine->AddOnScreenDebugMessage(2082, 1.0f, FColor::Emerald, "RemoveMovedToInteractableActor: MovedToInteractableActor"); 
+	}
+	if (MovedToInteractableActor)
+	{
+		MovedToInteractableRiver = NULL;
+		GEngine->AddOnScreenDebugMessage(2083, 1.0f, FColor::Emerald, "RemoveMovedToInteractableActor: MovedToInteractableActor");
+	}
+	
 }
 
 void ATerraPlayerController::SetPausedGameStatus(bool PausedStatus)
@@ -361,4 +486,26 @@ void ATerraPlayerController::CloseInterfaceWithESC()
 		CharacterMenu->ChangeUIStatus();
 		return;
 	}
+}
+
+FVector ATerraPlayerController::GetClosestPointOnSpline(USplineComponent* Spline, const FVector& Location)
+{
+
+	float ClosestDistance = FLT_MAX;
+	int32 ClosestKey = 0;
+
+	for (int32 i = 0; i < Spline->GetNumberOfSplinePoints(); ++i)
+	{
+		FVector SplinePoint = Spline->GetWorldLocationAtSplinePoint(i);
+		float Distance = FVector::Dist(Location, SplinePoint);
+		UE_LOG(LogTemplateCharacter, Error, TEXT("Spline point Distance %d: %s"), i, *SplinePoint.ToString());
+
+		if (Distance < ClosestDistance)
+		{
+			ClosestDistance = Distance;
+			ClosestKey = i;
+		}
+	}
+
+	return Spline->GetWorldLocationAtSplinePoint(ClosestKey);
 }

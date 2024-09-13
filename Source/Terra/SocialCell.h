@@ -68,10 +68,20 @@ public:
 	void CalculateAndAddToRequestStatus(FName Status);
 	
 	TMap<FName, TArray<AInteractionMark*>> UniteMarks(TMap<FName, TArray<AInteractionMark*>> FirstMarksArray, TMap<FName, TArray<AInteractionMark*>> AnotherMarksArray);
+
+
+	/// Searching ///
+
 	ATerraCharacter* FindBetterCharacterForActivity(FName Activity, FName AdditionalInfo = "None");
 	ATerraCharacter* GetSlowestCharacter();
 	float GetStatusConsumeAtSecond(FName Status);
+	float GetStatusConsueAtDay(FName Status);
 	FName FindActivityByMark(TEnumAsByte<EMarkType> MarkType);
+	TArray<FName> GetMarksIDForRestoreStatus(FName Status);
+	float GetEfficencyMarkValue(AInteractionMark* LocalMark, bool bFunctionType, FName Status);
+	
+
+	//////
 
 	/// Interaction with Characters /// 
 

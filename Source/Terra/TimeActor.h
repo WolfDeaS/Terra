@@ -28,6 +28,9 @@ public:
 	void OneInGameSecond();
 	void AddCharacterToArray(ATerraCharacter* TerraCharacter);
 
+	TArray<AInteractionMark*> GetAllMarksForStatus(FName Status);
+	TMap<FName, int> GetNumberOfMarkThatRestoreStats(FName Status);
+
 	UPROPERTY(EditAnywhere)
 	int DayLength; 
 
