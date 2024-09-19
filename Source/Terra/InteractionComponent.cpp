@@ -46,7 +46,6 @@ void UInteractionComponent::OnInteractionBegan(ATerraCharacter* LocalCharacter)
 	TMap<FSItem, float> RemoveItems;
 	TMap<FSItem, float> AddItems;
 
-	FSItem LocalNewItem;
 	float LocalValue = 0.0f;
 
 	switch (InteractID)
@@ -210,11 +209,12 @@ void UInteractionComponent::ItemsMustRot(ATerraCharacter* LocalCharacter)
 void UInteractionComponent::AfterInteractionEffect(ATerraCharacter* LocalCharacter)
 {
 	UWCharacterMenu* LocalCharacterMenu;
-	FSItem LocalNewItem;
 	float LocalValue = 0.0f;
 	float AnotherLocalValue = 0.0f;
 	TArray<FSItem> LocalItems;
 	float BeverageContainerFree;
+	float BeverageContainerFill;
+	float LocalItemFree;
 	float LocalItemFill;
 
 	switch (InteractID)
@@ -278,43 +278,101 @@ void UInteractionComponent::AfterInteractionEffect(ATerraCharacter* LocalCharact
 
 		break;
 
+	// 0 - To ид, 1 - To IA
 	case EInteractID::BeverageContainer:
 		
+
 		LocalCharacterMenu = Cast<ATerraPlayerController>(LocalCharacter->GetController())->CharacterMenu;
 
-		LocalNewItem = LocalCharacterMenu->SelectedItemStruct;
-		ActorREF->InventoryComponent->Inventory.GenerateKeyArray(LocalItems);
-		BeverageContainerFree = ActorREF->InventoryComponent->GetBeverageCapacityFree(LocalItems[0]);
-		LocalItemFill = ActorREF->InventoryComponent->GetBeverageCapacityFill(LocalCharacterMenu->SelectedItemStruct);
-
-		if (LocalCharacterMenu->LocalMenuStatus == 0)
+		if (!LocalCharacter->bIsInteracted)
 		{
-			if (BeverageContainerFree >= LocalItemFill)
-			{
-				ActorREF->InventoryComponent->AddSeveralBeverage(LocalItems[0], LocalCharacterMenu->SelectedItemStruct.CapacityModifier, true);
+			LocalCharacter->ChangeCharacterInteractionStatus(1);
+			LocalNewItem = LocalCharacterMenu->SelectedItemStruct;
 
-				LocalCharacter->InventoryComponent->RemoveItem(LocalNewItem, 1);
-				LocalNewItem.CapacityModifier = LocalCharacter->InventoryComponent->RemoveAndApplyBeverageModifier(LocalCharacterMenu->SelectedItemStruct.CapacityModifier, LocalItemFill);
-				LocalCharacter->InventoryComponent->AddItemToInventory(LocalNewItem, 1);
+			ActorREF->InventoryComponent->Inventory.GenerateKeyArray(LocalItems);
+			LocalItem = LocalItems[0];
+
+			if (LocalCharacterMenu->LocalMenuStatus == 0)
+			{
+				LocalValue = 1.0f - ((LocalCharacter->InventoryComponent->GetBeverageCapacityFill(LocalNewItem)) / *LocalNewItem.ModifierBonuses.Find("Capacity"));
+
+				if (LocalNewItem.ModifierBonuses.Contains("MinTimeToFill"))
+				{
+					AnotherLocalValue = *LocalNewItem.ModifierBonuses.Find("MinTimeToFill");
+				}
+				LocalValue *= (*LocalNewItem.ModifierBonuses.Find("TimeToFill") - AnotherLocalValue);
+				LocalValue += AnotherLocalValue;
 			}
 			else
 			{
-				LocalValue = LocalItemFill - BeverageContainerFree;
+				LocalValue = 1.0f - ((LocalCharacter->InventoryComponent->GetBeverageCapacityFree(LocalNewItem)) / *LocalNewItem.ModifierBonuses.Find("Capacity"));
 
-				ActorREF->InventoryComponent->AddSeveralBeverage(LocalItems[0], LocalCharacter->InventoryComponent->RemoveAndApplyBeverageModifier(LocalCharacterMenu->SelectedItemStruct.CapacityModifier, LocalValue), true);
-
-				LocalCharacter->InventoryComponent->RemoveItem(LocalNewItem, 1);
-				LocalNewItem.CapacityModifier = LocalCharacter->InventoryComponent->RemoveAndApplyBeverageModifier(LocalCharacterMenu->SelectedItemStruct.CapacityModifier, BeverageContainerFree);
-				LocalCharacter->InventoryComponent->AddItemToInventory(LocalNewItem, 1);
+				if (LocalNewItem.ModifierBonuses.Contains("MinTimeToFill"))
+				{
+					AnotherLocalValue = *LocalNewItem.ModifierBonuses.Find("MinTimeToFill");
+				}
+				LocalValue *= (*LocalNewItem.ModifierBonuses.Find("TimeToFill") - AnotherLocalValue);
+				LocalValue += AnotherLocalValue;
 			}
+
+			UE_LOG(LogTemp, Warning, TEXT("AfterInteractionEffect;BeverageContainer: Start Capacity - %f"), LocalValue);
+
+			GetWorld()->GetTimerManager().SetTimer(LocalCharacter->InteractionTimerHandle, [LocalCharacter, this]() { AfterInteractionEffect(LocalCharacter); }, LocalValue, false);
 		}
-		else if (LocalCharacterMenu->LocalMenuStatus == 1)
+		else
 		{
+			LocalCharacter->ChangeCharacterInteractionStatus(0);
 
+			BeverageContainerFill = ActorREF->InventoryComponent->GetBeverageCapacityFill(LocalItem);
+			BeverageContainerFree = ActorREF->InventoryComponent->GetBeverageCapacityFree(LocalItem);
+			LocalItemFill = ActorREF->InventoryComponent->GetBeverageCapacityFill(LocalNewItem);
+			LocalItemFree = ActorREF->InventoryComponent->GetBeverageCapacityFree(LocalNewItem);
+
+			if (LocalCharacterMenu->LocalMenuStatus == 0)
+			{
+				if (BeverageContainerFree >= LocalItemFill)
+				{
+					ActorREF->InventoryComponent->AddSeveralBeverage(LocalItem, LocalNewItem.CapacityModifier, true);
+
+					LocalCharacter->InventoryComponent->RemoveItem(LocalNewItem, 1);
+					LocalNewItem.CapacityModifier = LocalCharacter->InventoryComponent->RemoveAndApplyBeverageModifier(LocalNewItem.CapacityModifier, LocalItemFill);
+					LocalCharacter->InventoryComponent->AddItemToInventory(LocalNewItem, 1);
+				}
+				else
+				{
+					LocalValue = LocalItemFill - BeverageContainerFree;
+
+					ActorREF->InventoryComponent->AddSeveralBeverage(LocalItem, LocalCharacter->InventoryComponent->RemoveAndApplyBeverageModifier(LocalNewItem.CapacityModifier, LocalValue), true);
+
+					LocalCharacter->InventoryComponent->RemoveItem(LocalNewItem, 1);
+					LocalNewItem.CapacityModifier = LocalCharacter->InventoryComponent->RemoveAndApplyBeverageModifier(LocalNewItem.CapacityModifier, BeverageContainerFree);
+					LocalCharacter->InventoryComponent->AddItemToInventory(LocalNewItem, 1);
+				}
+			}
+			else if (LocalCharacterMenu->LocalMenuStatus == 1)
+			{
+				if (LocalItemFree >= BeverageContainerFill)
+				{
+					LocalCharacter->InventoryComponent->AddSeveralBeverage(LocalNewItem, LocalItem.CapacityModifier);
+
+					ActorREF->InventoryComponent->RemoveItem(LocalItem, 1, true);
+					LocalItem.CapacityModifier = ActorREF->InventoryComponent->RemoveAndApplyBeverageModifier(LocalItem.CapacityModifier, BeverageContainerFill);
+					ActorREF->InventoryComponent->AddItemToInventory(LocalItem, 1, true);
+				}
+				else
+				{
+					LocalValue = BeverageContainerFill - LocalItemFree;
+
+					LocalCharacter->InventoryComponent->AddSeveralBeverage(LocalNewItem, ActorREF->InventoryComponent->RemoveAndApplyBeverageModifier(LocalItem.CapacityModifier, LocalValue));
+
+					ActorREF->InventoryComponent->RemoveItem(LocalItem, 1, true);
+					LocalItem.CapacityModifier = ActorREF->InventoryComponent->RemoveAndApplyBeverageModifier(LocalItem.CapacityModifier, LocalItemFree);
+					ActorREF->InventoryComponent->AddItemToInventory(LocalItem, 1, true);
+				}
+			}
+
+			UE_LOG(LogTemp, Warning, TEXT("AfterInteractionEffect;BeverageContainer: End Fill Capacity"));
 		}
-		
-
-		//LocalCharacter->ChangeCharacterInteractionStatus(0);
 
 		break;
 	}

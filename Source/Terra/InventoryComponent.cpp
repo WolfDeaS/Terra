@@ -80,7 +80,6 @@ void UInventoryComponent::RemoveItem(FSItem Item, int Quantity, bool bIgnoreCarg
 	int LocalInt;
 	LocalInt = *Inventory.Find(Item);
 
-	int LocalVafla = 1 + 2;
 	if (LocalInt - Quantity <= 0)
 	{
 		Inventory.Remove(Item);
@@ -743,11 +742,11 @@ TMap<FName, float> UInventoryComponent::RemoveAndApplyBeverageModifier(TMap<FNam
 	{
 		OutputCapacity.Add(Pair.Key, *CapacityModifier.Find(Pair.Key) - Pair.Value);
 
-		FSBeverageCreation* BeverageDataFromDT;
-		BeverageDataFromDT = DT_Beverage->FindRow<FSBeverageCreation>(Pair.Key, TEXT("none"), false);
-
 		if (bApplyModifiers)
 		{
+			FSBeverageCreation* BeverageDataFromDT;
+			BeverageDataFromDT = DT_Beverage->FindRow<FSBeverageCreation>(Pair.Key, TEXT("none"), false);
+
 			for (auto& LocalPair : BeverageDataFromDT->ModifierBonuses)
 			{
 				LocalModifierBonuses.Add(LocalPair.Key, LocalPair.Value * Pair.Value);

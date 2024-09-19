@@ -105,6 +105,7 @@ public:
 	AInteractableRiver* ActorRiverREF;
 	
 	FSItem LocalItem;
+	FSItem LocalNewItem;
 	TArray<FName> ItemsID;
 	bool bIsDurabilityDecay;
 };
